@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+aiohttp
+requests
+pydantic
+ghasedak-sms
+pyftpdlib

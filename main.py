@@ -20,6 +20,7 @@ from database import init_db
 from api.fota import router as fota_router
 from api.ussd import router as ussd_router
 from api.auth import router as auth_router
+from api.device import router as device_router
 
 # Global reference to client for the route handler to use
 # Ideally we would use dependency injection in FastAPI but a global is fine for this simple port to match original logic
@@ -118,6 +119,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(fota_router)
 app.include_router(ussd_router)
 app.include_router(auth_router)
+app.include_router(device_router)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8088)

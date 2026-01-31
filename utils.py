@@ -20,3 +20,12 @@ def parse_params(s: str):
     return out
 
 
+def is_imei(s: str) -> bool:
+    """
+    Check if string looks like an IMEI (15 digits).
+    """
+    if not s:
+        return False
+    return s.isdigit() and len(s) == 15
+
+

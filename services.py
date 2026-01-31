@@ -3,7 +3,19 @@ import asyncio
 from typing import Optional
 from collections import deque
 from utils import parse_params
+from datetime import datetime
+from utils import parse_params
 from traccar_client import TraccarClient
+
+# Helper function for device type mapping
+def device_type_to_model(device_type):
+    dt = int(device_type)
+    if dt == 170: return "develope_device"
+    if dt == 120: return "TYNOR-T120"
+    if dt == 90: return "TYNOR-T900"
+    if dt == 95: return "TYNOR-T950"
+    if dt == 92: return "TYNOR-T920"
+    return "unknown"
 
 class DeviceService:
     def __init__(self, client: TraccarClient):
@@ -72,9 +84,116 @@ class DeviceService:
 
         await self.client.update_device_attributes(device_id, {"trackerparams": merged})
 
+        await self.client.update_device_attributes(device_id, {"trackerparams": merged})
+
     # -----------------------------------------------------------
-    # WebSocket message parser
+    # Generate Device Name (Python port of PHP logic)
     # -----------------------------------------------------------
+    async def generate_device_name(self, user_id: int):
+        devices = await self.client.get_devices({"userId": user_id})
+        
+        last_device_id = 0
+        last_device_name = ""
+        
+        for item in devices:
+            name = item.get("name", "")
+            # Check if name starts with "خودرو"
+            # PHP: explode(" ", $item->name)[0] == "خودرو"
+            parts = name.split(" ")
+            if len(parts) > 0 and parts[0] == "خودرو":
+                if item["id"] > last_device_id:
+                    last_device_id = item["id"]
+                    last_device_name = name
+                    
+        if last_device_name:
+            parts = last_device_name.split(" ")
+            if len(parts) > 1 and parts[0] == "خودرو":
+                try:
+                    num = int(parts[1])
+                    return f"{parts[0]} {num + 1}"
+                except ValueError:
+                    return "خودرو 1"
+            else:
+                 return "خودرو 1"
+        else:
+            return "خودرو 1"
+
+    # -----------------------------------------------------------
+    # Handle Registration Event (CMD 29)
+    # -----------------------------------------------------------
+    async def handle_registration_event(self, device_id: int, command_result: dict):
+        try:
+            print(f"🆕 Handling Registration/Init for Device {device_id}")
+            
+            param = command_result.get("param", {})
+            
+            imei = param.get("imei")
+            imsi = param.get("imsi")
+            spn = param.get("spn")
+            fw = param.get("fw")
+            device_password = param.get("dp")
+            device_type = param.get("dm")
+            hardware_revision = param.get("dr")
+            ts = param.get("ts")
+            owner = param.get("owner")
+            
+            # Format date
+            if ts:
+                reg_date = datetime.fromtimestamp(ts).strftime('%m/%d/%Y %H:%M:%S')
+            else:
+                 reg_date = datetime.now().strftime('%m/%d/%Y %H:%M:%S')
+
+            # Get current device details
+            dev = await self.client.get_device(device_id)
+            attrs = dev.get("attributes", {})
+            
+            # Get User ID (Assignee)
+            user_id = attrs.get("assignee")
+            if not user_id:
+                print(f"⚠️ Device {device_id} has no assignee (user_id). Skipping specific naming.")
+                # We might still proceed with updating other attributes? 
+                # PHP code uses user_id to generate name. If missing, maybe just skip naming?
+                # User provided code: $user_id = $device->attributes->assignee;
+                # If null, generateDeviceName might fail or return default?
+                # Let's assume user_id is zero if missing?
+                user_id = 0 
+                
+            # Generate Name
+            if user_id:
+                 new_name = await self.generate_device_name(user_id)
+            else:
+                 new_name = f"Device {device_id}" # Fallback
+            
+            # Map Model
+            new_model = device_type_to_model(device_type) if device_type else dev.get("model")
+            
+            # Update Attributes
+            attrs["registrationDate"] = reg_date
+            attrs["imsi"] = imsi
+            attrs["spn"] = spn
+            attrs["firmware"] = fw
+            attrs["hw_rev"] = hardware_revision
+            attrs["Device Password"] = device_password
+            
+            # Prepare update payload
+            # We want to update name, model, and attributes.
+            device_update = {
+                "id": device_id,
+                "name": new_name,
+                "uniqueId": dev["uniqueId"], # Required usually
+                "model": new_model,
+                "attributes": attrs,
+                "groupId": dev.get("groupId"),
+                "phone": dev.get("phone"),
+                "category": dev.get("category"),
+                "disabled": dev.get("disabled", False)
+            }
+            
+            await self.client.update_device(device_id, device_update)
+            print(f"✅ Device {device_id} initialized with Name: {new_name}, Model: {new_model}")
+
+        except Exception as e:
+            print(f"❌ Registration Handler Error: {e}")
     def handle_ws_message(self, msg: str):
         try:
             data = json.loads(msg)
@@ -150,6 +269,15 @@ class DeviceService:
                     params = result[len("New value"):].strip()
                     asyncio.create_task(self.update_trackerparams(device_id, params))
                     continue
+
+                if result.startswith("{\"cmd\":29"):
+                    print("Got 29 command response")
+                    try:
+                        cmd_res = json.loads(result)
+                        if cmd_res.get("cmd") == 29:
+                            asyncio.create_task(self.handle_registration_event(device_id, cmd_res))
+                    except Exception as e:
+                        print(f"❌ Failed to parse Cmd 29 JSON: {e}")
 
         except Exception as e:
             print("❌ WS parse error:", e)
