@@ -15,7 +15,7 @@ async def periodic_qssd_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950") and d.get("id") == 124
+                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
             ]
 
             count = 0
@@ -63,7 +63,7 @@ async def periodic_getparams_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950") and d.get("id") == 115
+                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
             ]
 
             count = 0

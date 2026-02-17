@@ -1,10 +1,35 @@
 import os
+import sys
+import subprocess
+from typing import Optional
 import logging
 from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
 import psutil
+
+
+def start_server() -> Optional[subprocess.Popen]:
+    try:
+        # Get absolute path of this script
+        ftp_script = os.path.abspath(__file__)
+        # Start it with the same python executable
+        ftp_process = subprocess.Popen([sys.executable, ftp_script])
+        print(f"🚀 FTP Server started with PID {ftp_process.pid}")
+        return ftp_process
+    except Exception as e:
+        print(f"❌ Failed to start FTP Server: {e}")
+        return None
+
+def stop_server(ftp_process: Optional[subprocess.Popen]):
+    if ftp_process:
+        print("🛑 Stopping FTP Server...")
+        ftp_process.terminate()
+        try:
+            ftp_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            ftp_process.kill()
 
 def kill_old_ftp_process():
     print("🧹 Scanning for old FTP server processes...")
@@ -32,7 +57,7 @@ def main():
     # Configuration
     FTP_USER = "avl"
     FTP_PASS = "123456"
-    FTP_PORT = 2121  # Using 2121 to avoid permission issues. Change to 21 if needed/allowed.
+    FTP_PORT = 21  # Using 2121 to avoid permission issues. Change to 21 if needed/allowed.
     
     # Directory to serve
     # Getting absolute path of 'ftp_root' in the current directory
@@ -82,7 +107,7 @@ def main():
     # Define a customized banner (string returned when client connects)
     handler.banner = "pyftpdlib based ftpd ready."
 
-    # Instantiate FTP server class and listen on 0.0.0.0:2121
+    # Instantiate FTP server class and listen on 0.0.0.0:21
     address = ('0.0.0.0', FTP_PORT)
     server = FTPServer(address, handler)
 
