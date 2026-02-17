@@ -5,3 +5,4 @@ requests
 pydantic
 ghasedak-sms
 pyftpdlib
+psutil

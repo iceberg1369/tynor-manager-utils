@@ -1,0 +1,58 @@
+[
+    {
+        "id": 4,
+        "device": 90,
+        "firmware": 67329,
+        "rev": 1,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/90/67329.bin",
+        "date": "2020-02-19 12:56:13"
+    },
+    {
+        "id": 5,
+        "device": 90,
+        "firmware": 67585,
+        "rev": 1,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/90/67585.bin",
+        "date": "2020-02-19 12:56:13"
+    },
+    {
+        "id": 6,
+        "device": 90,
+        "firmware": 67586,
+        "rev": 1,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/90/67586.bin",
+        "date": "2020-02-19 12:56:13"
+    },
+    {
+        "id": 9,
+        "device": 90,
+        "firmware": 67591,
+        "rev": 1,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/90/67591.bin",
+        "date": "2020-02-19 12:56:13"
+    },
+    {
+        "id": 11,
+        "device": 90,
+        "firmware": 131080,
+        "rev": 2,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/90/131080.bin",
+        "date": "2020-02-19 12:56:13"
+    },
+    {
+        "id": 12,
+        "device": 230,
+        "firmware": 131072,
+        "rev": 1,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/230/app.bin",
+        "date": "2020-02-19 12:56:13"
+    },
+    {
+        "id": 13,
+        "device": 220,
+        "firmware": 67856,
+        "rev": 1,
+        "download_path": "ftp://avl:123456@upgrade.hiro-tracker.com/220/app.bin",
+        "date": "2020-02-19 12:56:13"
+    }
+]

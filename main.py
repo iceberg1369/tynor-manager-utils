@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 from datetime import datetime
 
+
 from fastapi import FastAPI, Request
 
 import config
@@ -26,6 +27,7 @@ from api.device import router as device_router
 # Ideally we would use dependency injection in FastAPI but a global is fine for this simple port to match original logic
 client: Optional[TraccarClient] = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # STARTUP
@@ -33,6 +35,8 @@ async def lifespan(app: FastAPI):
     
     # Initialize Database
     init_db()
+    
+    # Old FTP instances are now killed by the FTP server script itself on startup
 
     client = TraccarClient(config.BASE_URL, config.TOKEN, verify_ssl=False)
     app.state.client = client
@@ -45,7 +49,7 @@ async def lifespan(app: FastAPI):
     ws_task = asyncio.create_task(client.listen_socket(on_message=service.handle_ws_message))
 
     # Start Periodic Task
-    #qssd_task = asyncio.create_task(periodic_qssd_task(client))
+    qssd_task = asyncio.create_task(periodic_qssd_task(client))
     getparams_task = asyncio.create_task(periodic_getparams_task(client))
 
     # Initial Device Check & Command Sending
@@ -65,7 +69,7 @@ async def lifespan(app: FastAPI):
             dev_id = dev["id"] 
             status = dev.get("status")
 
-            if status == "online" and dev["id"] == 115:
+            if status == "online" and dev["id"] == 124:
                 try:
                     # resp = await client.send_command(dev_id, "bacmd:ALLPARAMS")
                     # print("✅ Sent ALLPARAMS CMD:", resp)

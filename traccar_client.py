@@ -85,6 +85,21 @@ class TraccarClient:
                 raise RuntimeError(f"POST permissions {resp.status}: {text}")
              return True
 
+    async def remove_permission(self, user_id: int, device_id: int):
+        payload = {"userId": user_id, "deviceId": device_id}
+        sess = await self._get_session()
+        url = f"{self._base_url}/permissions"
+        headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+        
+        async with sess.delete(url, headers=headers, json=payload, ssl=self._verify_ssl) as resp:
+             if resp.status == 204:
+                 return True
+             
+             if resp.status not in (200, 201, 202, 204):
+                text = await resp.text()
+                raise RuntimeError(f"DELETE permissions {resp.status}: {text}")
+             return True
+
     # -----------------------------------------------------------
     # Send custom command
     # -----------------------------------------------------------

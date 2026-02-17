@@ -2,6 +2,8 @@
 import sqlite3
 import config
 import logging
+import json
+import os
 
 logger = logging.getLogger("database")
 
@@ -57,29 +59,24 @@ def init_db():
 def find_newer_firmware(device: int, rev: int, current_fw: int):
     """
     Find firmware where device=device, rev=rev, and firmware > current_fw.
+    Reads from 'firmwares.json' in the same directory.
     """
-    query = "SELECT * FROM firmwares WHERE device = ? AND rev = ? AND firmware > ?"
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(query, (device, rev, current_fw))
-        # Fetch one (or all? PHP loop implies it could return multiple but usually we want one)
-        # PHP does while loop but outputs JSON immediately.
-        # We will return list of matches or just the first one.
-        rows = cursor.fetchall()
+    try:
+        json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firmwares.json')
+        with open(json_path, 'r') as f:
+            firmwares = json.load(f)
+            
+        results = [
+            fw for fw in firmwares 
+            if fw.get("device") == device 
+            and fw.get("rev") == rev 
+            and fw.get("firmware") > current_fw
+        ]
         
-        results = []
-        for row in rows:
-            # map tuple to dict based on schema
-            # id, device, firmware, rev, download_path, date
-            results.append({
-                "id": row[0],
-                "device": row[1],
-                "firmware": row[2],
-                "rev": row[3],
-                "download_path": row[4],
-                "date": row[5]
-            })
         return results
+    except Exception as e:
+        logger.error(f"Failed to load firmware from JSON: {e}")
+        return []
 
 def log_fota_request(imei, serial, firmware, device, rev, result, date, attr=""):
     query = """

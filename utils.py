@@ -26,6 +26,25 @@ def is_imei(s: str) -> bool:
     """
     if not s:
         return False
-    return s.isdigit() and len(s) == 15
+    return s.isdigit() and len(s) < 16 and len(s) > 13
 
 
+def get_balance_ussd(imsi: str) -> str:
+    """
+    Generate USSD code for balance retrieval based on IMSI using operator codes.
+    """
+    if not imsi or len(imsi) < 5:
+        return ""
+
+    mcc = imsi[:3]
+    mnc = imsi[3:5]
+
+    if mcc == "432": # IRAN
+        if mnc == "35":        # Irancell
+            return "*555*1*2#"
+        if mnc == "20":        # Rightel
+            return "*140#"
+        if mnc == "11":        # Hamrahe Aval
+            return "*140*11#"
+
+    return ""

@@ -87,6 +87,13 @@ class DeviceService:
         await self.client.update_device_attributes(device_id, {"trackerparams": merged})
 
     # -----------------------------------------------------------
+    # Update IMSI
+    # -----------------------------------------------------------
+    async def update_imsi(self, device_id: int, imsi: str):
+        print(f"💾 Saving IMSI {imsi} for device {device_id}")
+        await self.client.update_device_attributes(device_id, {"imsi": imsi})
+
+    # -----------------------------------------------------------
     # Generate Device Name (Python port of PHP logic)
     # -----------------------------------------------------------
     async def generate_device_name(self, user_id: int):
@@ -168,7 +175,8 @@ class DeviceService:
             new_model = device_type_to_model(device_type) if device_type else dev.get("model")
             
             # Update Attributes
-            attrs["registrationDate"] = reg_date
+            if "registrationDate" not in attrs:
+                attrs["registrationDate"] = reg_date
             attrs["imsi"] = imsi
             attrs["spn"] = spn
             attrs["firmware"] = fw
@@ -268,6 +276,13 @@ class DeviceService:
                 if result.startswith("New value"):
                     params = result[len("New value"):].strip()
                     asyncio.create_task(self.update_trackerparams(device_id, params))
+                    continue
+
+                # IMSI RESPONSE
+                if result.startswith("IMSI:"):
+                    imsi = result.split(":", 1)[1].strip()
+                    if imsi.isdigit():
+                        asyncio.create_task(self.update_imsi(device_id, imsi))
                     continue
 
                 if result.startswith("{\"cmd\":29"):

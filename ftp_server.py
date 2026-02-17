@@ -4,7 +4,28 @@ from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
+import psutil
+
+def kill_old_ftp_process():
+    print("🧹 Scanning for old FTP server processes...")
+    current_pid = os.getpid()
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if proc.info['cmdline']:
+                cmdline = " ".join(proc.info['cmdline'])
+                if 'ftp_server.py' in cmdline and proc.info['pid'] != current_pid:
+                    print(f"🔪 Found old FTP process (PID {proc.info['pid']}). Terminating...")
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+                    print(f"✅ Terminated PID {proc.info['pid']}")
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
 def main():
+    kill_old_ftp_process()
     # Suppress pyftpdlib info logs
     logging.getLogger("pyftpdlib").setLevel(logging.WARNING)
 

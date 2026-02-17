@@ -1,6 +1,7 @@
 # tasks.py
 import asyncio
 from traccar_client import TraccarClient
+from utils import get_balance_ussd
 
 # -----------------------------------------------------------
 # Periodic Task: Send qssd every 6 hours
@@ -14,7 +15,7 @@ async def periodic_qssd_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950") and d.get("id") == 115
+                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950") and d.get("id") == 124
             ]
 
             count = 0
@@ -22,9 +23,21 @@ async def periodic_qssd_task(api_client: TraccarClient):
                 if dev.get("status") == "online":
                     dev_id = dev["id"]
                     try:
-                        await api_client.send_command(dev_id, "qssd:*140*11#")
-                        print(f"   -> Sent qssd to {dev_id}")
-                        count += 1
+                        # Try to get IMSI from attributes or top-level
+                        imsi = dev.get("attributes", {}).get("imsi") or dev.get("imsi")
+                        ussd_code = get_balance_ussd(str(imsi)) if imsi else None
+                        
+                        if ussd_code:
+                            await api_client.send_command(dev_id, f"qssd:{ussd_code}")
+                            print(f"   -> Sent qssd:{ussd_code} to {dev_id}")
+                            count += 1
+                        else:
+                            if not imsi:
+                                print(f"   -> No IMSI for {dev_id}, requesting IMSI...")
+                                await api_client.send_command(dev_id, "getimsi")
+                            else:
+                                print(f"   -> Skipped {dev_id}: No USSD code found for IMSI '{imsi}'")
+                            
                     except Exception as e:
                         print(f"   -> Failed to send to {dev_id}: {e}")
             
