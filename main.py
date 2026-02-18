@@ -1,4 +1,4 @@
-# main.py
+
 import asyncio
 import re
 import uvicorn
@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 from datetime import datetime
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 import config
 from traccar_client import TraccarClient
 from services import DeviceService
@@ -65,7 +66,7 @@ async def lifespan(app: FastAPI):
             dev_id = dev["id"] 
             status = dev.get("status")
 
-            if status == "online" and dev["id"] == 124:
+            if status == "online":
                 try:
                     # resp = await client.send_command(dev_id, "bacmd:ALLPARAMS")
                     # print("✅ Sent ALLPARAMS CMD:", resp)
@@ -103,11 +104,7 @@ async def lifespan(app: FastAPI):
     
     print("👋 Graceful shutdown complete.")
 
-app = FastAPI(lifespan=lifespan)
-app.include_router(fota_router)
-app.include_router(ussd_router)
-app.include_router(auth_router)
-app.include_router(device_router)
+from httpserver import start_server
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=80)
+    start_server(lifespan)
