@@ -242,6 +242,8 @@ async def verify_otp(data: OtpVerify):
     
     # Valid
     del otp_store[data.phone] # Consume OTP
+
+    print(f"✅ OTP validated for {data.phone}: {data.sms_message}")
     
     # Use real token generation
     try:
@@ -249,6 +251,9 @@ async def verify_otp(data: OtpVerify):
     except Exception as e:
         logger.error(f"Token generation error: {e}")
         return {"success": False, "message": f"Login failed: {e}"}
+    
+
+    print(f"token for user:{data.phone} generated:{token}")
     
     return {
         "success": True,

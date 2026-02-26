@@ -16,8 +16,7 @@ class DeviceRequest(BaseModel):
 
 @router.post("/api/device")
 async def handle_device_request(request: Request):
-    # Try parsing JSON body manually to handle potential issues or use Pydantic if cleaner
-    # Using manual parse to match PHP style of reading body
+
     try:
         body = await request.json()
     except:
@@ -26,6 +25,7 @@ async def handle_device_request(request: Request):
     # Extract fields with defaults
     user = body.get('user')
     imei = body.get('imei')
+    frmUser = body.get('from')
     device_password = body.get('dp')
     client_secret = body.get('client_secret')
 
@@ -79,22 +79,13 @@ async def handle_device_request(request: Request):
 
     # 6. Find User ID
 
-    users = await client.get_users() # fetch all for now or use search if list is huge?
-
-
-    user_id = 0
-    target_user_obj = None
-    for u in users:
-        if u.get('email') == user or u.get('name') == user or u.get('login') == user:
-            user_id = u.get('id')
-            target_user_obj = u
-            break
+    user_id = await client.find_user_id_by_username(user)
             
     # 7. Assignment Logic
     attributes = device.get('attributes', {})
     assignee = attributes.get('assignee')
 
-    if assignee is None:
+    if assignee is None or frmUser is not None:
         if user_id > 0:
             # Assign user to device
             try:
@@ -103,6 +94,19 @@ async def handle_device_request(request: Request):
                 print(f"Failed to add permission: {e}")
                 # Fallthrough? PHP logic proceeds to update attribute even if assign fails? 
                 # It calls assignUserDevice then updateAttributes.
+
+            if frmUser is not None:
+                # unlink device from old user
+                try:
+                    frm_user_id = await client.find_user_id_by_username(frmUser)
+                    print(f"from_user_id:{frm_user_id} deviceid:{device['id']}")
+                    
+                    if frm_user_id > 0:
+                        remove_permission_resp = await client.remove_permission(frm_user_id, device['id'])
+                        print(f"remove_permission output: {remove_permission_resp}")
+                except Exception as e:
+                    print(f"Failed to remove permission: {e}")
+            
             
             # Update assignee attribute
             new_attrs = {"assignee": user_id}
@@ -118,11 +122,7 @@ async def handle_device_request(request: Request):
             'message': "device already registered"
         }
 
-    # 8. Send Command
-    # PHP: $registerCommand = "{\\\"c\\\":29, \\\"param\\\":{\\\"owner\\\":\\\"${user}\\\",\\\"devicePassword\\\":\\\"${devicePassword}\\\"}}";
-    # Note proper JSON escaping in Python string for the inner JSON
-    
-    # Structure for "data" attribute in custom command
+    # 8. Send Command to the device
     cmd_data = {
         "c": 29,
         "param": {
@@ -132,14 +132,6 @@ async def handle_device_request(request: Request):
     }
     # Original PHP sends it as a JSON STRING inside the data attribute
     cmd_data_str = json.dumps(cmd_data)
-    
-    # The PHP code wraps it further?
-    # $attrs = '{"data":  "' . $registerCommand . '"}';
-    # gps::commandSend(..., "custom", $attrs);
-    
-    # Our client.send_command does:
-    # payload = { type: custom, attributes: { data: data } }
-    # So we just pass the inner string to send_command
     
     try:
         resp = await client.send_command(device['id'], cmd_data_str)
@@ -158,27 +150,37 @@ async def handle_device_request(request: Request):
         }
 
 
-@router.post("/api/checkDeviceInfo")
+@router.post("/api/check")
 async def handle_check_device_info(request: Request):
     try:
         body = await request.json()
     except:
         return {"success": False, "message": "Invalid JSON body"}
+
+    print("[CHECK] Incoming request")
+    print(f"[CHECK] Method: {request.method}")
+    print(f"[CHECK] URL: {request.url}")
+    print(f"[CHECK] Query: {dict(request.query_params)}")
+    print(f"[CHECK] Headers: {dict(request.headers)}")
+    print(f"[CHECK] Body: {body}")
     
     user = body.get('user')
     imei = body.get('imei')
+    frmUser = body.get('from')
     client_secret = body.get('client_secret')
 
     if not user and not imei and not client_secret:
          pass # matching PHP quirk?
     
     if not user or not imei or not client_secret:
+         print('The client_secret, phone, and imei parameters are required')
          return {
             'success': False,
             'message': 'The client_secret, phone, and imei parameters are required'
         }
 
     if client_secret != config.CLIENT_SECRET:
+         print('The client_secret parameter does not match.')
          return {
             'success': False,
             'message': 'The client_secret parameter does not match.'
@@ -187,10 +189,12 @@ async def handle_check_device_info(request: Request):
 
     client: TraccarClient = getattr(request.app.state, "client", None)
     if not client:
+        print("Internal Server Error")
         return {"success": False, "message": "Internal Server Error"}
 
     devices = await client.get_devices(params={"uniqueId": imei})
     if not devices:
+        print(f"device {imei} not found!!!!")
         return {
             'success': False,
             'message': f"device {imei} not found!!!!"
@@ -199,6 +203,7 @@ async def handle_check_device_info(request: Request):
     device = devices[0]
     
     if device.get('status') != 'online':
+        print("device not online")
         return {
             'success': False,
             'message': "device not online"
@@ -207,28 +212,26 @@ async def handle_check_device_info(request: Request):
     attributes = device.get('attributes', {})
     assignee = attributes.get('assignee')
 
-    if assignee is None:
+    if assignee is None or frmUser is not None:
         # Check user existence
-        users = await client.get_users()
-        user_id = 0
-        for u in users:
-             if u.get('email') == user or u.get('name') == user or u.get('login') == user:
-                user_id = u.get('id')
-                break
+        user_id = await client.find_user_id_by_username(user)
         
         if user_id > 0:
             pass # User found, assignments possible
         else:
+             print("user not found")
              return {
                 'success': False,
                 'message': "user not found"
             }
     else:
+        print("device already registered")
         return {
             'success': False,
             'message': "device already registered"
         }
 
+    print("device can be registered")
     return {
         'success': True,
         'message': "device can be registered"

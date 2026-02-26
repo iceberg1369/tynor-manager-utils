@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Query, Response
 from fastapi.responses import JSONResponse
 from datetime import datetime
+import json
 import database
 
 router = APIRouter()
@@ -61,31 +62,46 @@ async def handle_fota(
     fw: str = Query(None),
     rev: str = Query(None)
 ):
+    request_data = {
+        "imei": imei,
+        "sr": sr,
+        "d": d,
+        "fw": fw,
+        "rev": rev,
+    }
+    print("FOTA request:")
+    print(json.dumps(request_data, indent=2, ensure_ascii=False))
+
+    def build_response(status_code: int, content: dict):
+        print(f"FOTA response (status={status_code}):")
+        print(json.dumps(content, indent=2, ensure_ascii=False))
+        return JSONResponse(status_code=status_code, content=content)
+
     # 1. Validation
     if not imei:
-        return JSONResponse(status_code=400, content={'result': 'Error', 'message': "no imei"})
+        return build_response(400, {'result': 'Error', 'message': "no imei"})
     
     if not is_imei(imei):
         # The PHP code returns 400 for invalid IMEI
-        return JSONResponse(status_code=400, content={'result': 'Error', 'message': "invalid imei"})
+        return build_response(400, {'result': 'Error', 'message': "invalid imei"})
 
     if not sr:
-        return JSONResponse(status_code=400, content={'result': 'Error', 'message': "no serial"})
+        return build_response(400, {'result': 'Error', 'message': "no serial"})
     
     if not d:
-        return JSONResponse(status_code=400, content={'result': 'Error', 'message': "no device"})
+        return build_response(400, {'result': 'Error', 'message': "no device"})
     
     if not fw:
-        return JSONResponse(status_code=400, content={'result': 'Error', 'message': "no firmware version"})
+        return build_response(400, {'result': 'Error', 'message': "no firmware version"})
     
     if not rev:
-        return JSONResponse(status_code=400, content={'result': 'Error', 'message': "no revision"})
+        return build_response(400, {'result': 'Error', 'message': "no revision"})
 
     # Hardcoded check from PHP
-    if imei == "867717033890519":
-        return JSONResponse(content={
+    if imei == "864866058377200":
+        return build_response(200, {
             'result': 'SUCCESS', 
-            'download': 'ftp://avl:123456@upgrade2.hiro-tracker.com/90/67329/1', 
+            'download': 'ftp://avl:123456@tracking3.niktivan.ir/90/131081/1', 
             'firmware': "1.7.0", 
             'date': "dfdfd"
         })
@@ -119,7 +135,7 @@ async def handle_fota(
     
     except Exception as e:
         print(f"❌ FOTA Logic Error: {e}")
-        return JSONResponse(status_code=500, content={'result': 'ERROR', 'message': "internal error"})
+        return build_response(500, {'result': 'ERROR', 'message': "internal error"})
 
     # Logging
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -129,4 +145,4 @@ async def handle_fota(
     if dbres == 2:
         status_code = 400
 
-    return JSONResponse(status_code=status_code, content=response_data)
+    return build_response(status_code, response_data)
