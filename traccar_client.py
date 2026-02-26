@@ -61,6 +61,13 @@ class TraccarClient:
     async def get_users(self, params: dict = None):
         return await self._call("users", params=params)
 
+    async def find_user_id_by_username(self, username: str):
+        users = await self.get_users()
+        for u in users:
+            if u.get("email") == username or u.get("name") == username or u.get("login") == username:
+                return u.get("id")
+        return 0
+
     async def add_permission(self, user_id: int, device_id: int):
         payload = {"userId": user_id, "deviceId": device_id}
         sess = await self._get_session()
@@ -92,11 +99,12 @@ class TraccarClient:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
         
         async with sess.delete(url, headers=headers, json=payload, ssl=self._verify_ssl) as resp:
+             text = await resp.text()
+             print(f"remove_permission DELETE status={resp.status}, body={text}")
              if resp.status == 204:
                  return True
              
              if resp.status not in (200, 201, 202, 204):
-                text = await resp.text()
                 raise RuntimeError(f"DELETE permissions {resp.status}: {text}")
              return True
 
