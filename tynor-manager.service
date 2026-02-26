@@ -1,0 +1,35 @@
+[Unit]
+Description=Tynor Manager API (Uvicorn HTTPS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Required to bind to ports 80/443
+User=root
+Group=root
+
+# IMPORTANT: where main.py lives
+WorkingDirectory=/home/ubuntu/tynor-manager
+
+# Use the venv python directly (DO NOT "activate")
+ExecStart=/home/ubuntu/tynor-manager/venv/bin/python main.py
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=VIRTUAL_ENV=/home/ubuntu/tynor-manager/venv
+Environment=PATH=/home/ubuntu/tynor-manager/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+
+# Restart behavior
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
