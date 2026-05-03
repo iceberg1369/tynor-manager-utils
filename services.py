@@ -21,6 +21,23 @@ class DeviceService:
     def __init__(self, client: TraccarClient):
         self.client = client
         self.recent_event_ids = deque(maxlen=100)
+        self.device_names = {}
+
+    async def get_device_name(self, device_id: int):
+        if not device_id:
+            return ""
+
+        if device_id in self.device_names:
+            return self.device_names[device_id]
+
+        try:
+            dev = await self.client.get_device(device_id)
+            name = dev.get("name", "")
+            self.device_names[device_id] = name
+            return name
+        except Exception as e:
+            print(f"⚠️ Could not fetch name for device {device_id}: {e}")
+            return ""
 
     # -----------------------------------------------------------
     # SAVE ALLPARAMS (full parameter list)
@@ -198,13 +215,21 @@ class DeviceService:
             }
             
             await self.client.update_device(device_id, device_update)
+            self.device_names[device_id] = new_name
             print(f"✅ Device {device_id} initialized with Name: {new_name}, Model: {new_model}")
 
         except Exception as e:
             print(f"❌ Registration Handler Error: {e}")
-    def handle_ws_message(self, msg: str):
+
+    async def handle_ws_message(self, msg: str):
         try:
             data = json.loads(msg)
+
+            for device in data.get("devices", []):
+                device_id = device.get("id")
+                device_name = device.get("name", "")
+                if device_id:
+                    self.device_names[device_id] = device_name
 
             if "events" not in data:
                 return
@@ -226,7 +251,8 @@ class DeviceService:
                 if event_id:
                     self.recent_event_ids.append(event_id)
 
-                print(f"✅ Event {event_id} → Device {device_id}")
+                device_name = await self.get_device_name(device_id)
+                print(f"✅ Event ID:{event_id} → Device ID:{device_id}  Name:{device_name}")
                 print(result)
 
                 # Full parameter list

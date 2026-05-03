@@ -54,7 +54,6 @@ def is_imei(imei: str) -> bool:
 
 
 @router.get("/fota.php")
-@router.post("/fota.php")
 async def handle_fota(
     imei: str = Query(None),
     sr: str = Query(None),

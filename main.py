@@ -68,9 +68,9 @@ async def lifespan(app: FastAPI):
 
             if status == "online":
                 try:
-                    # resp = await client.send_command(dev_id, "bacmd:ALLPARAMS")
-                    # print("✅ Sent ALLPARAMS CMD:", resp)
-                    print("-------------------")
+                    resp = await client.send_command(dev_id, "bacmd:ALLPARAMS")
+                    print("✅ Sent ALLPARAMS CMD:", resp)
+                    # print("-------------------")
                 except Exception as e:
                     print(f"❌ Failed to send ALLPARAMS to {dev_id}: {e}")
 

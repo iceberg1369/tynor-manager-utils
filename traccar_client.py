@@ -185,7 +185,9 @@ class TraccarClient:
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             if on_message:
-                                on_message(msg.data)
+                                result = on_message(msg.data)
+                                if asyncio.iscoroutine(result):
+                                    await result
 
                         elif msg.type == aiohttp.WSMsgType.ERROR:
                             print("❌ WS internal error:", ws.exception())
@@ -215,9 +217,11 @@ class TraccarClient:
         sess = await self._get_session()
         url = f"{self._base_url}/session"
         data = {"email": username, "password": password}
+
         # Login is usually x-www-form-urlencoded
         async with sess.post(url, data=data, ssl=self._verify_ssl) as resp:
             text = await resp.text()
+            print(text)
             if resp.status not in (200, 201, 202):
                 raise RuntimeError(f"Login failed {resp.status}: {text}")
             return json.loads(text)

@@ -54,26 +54,30 @@ def start_server(lifespan):
     )
     server_http = uvicorn.Server(config_http)
 
-    # Define HTTPS config - Lifespan disabled to avoid duplicate tasks/init
-    config_https = uvicorn.Config(
-        app,
-        host="0.0.0.0",
-        port=443,
-        log_level="info",
-        ssl_keyfile=config.SSL_PRIVKEY_PEM,
-        ssl_certfile=config.SSL_FULLCHAIN_PEM,
-        lifespan="off",
-        access_log=False,
-        log_config=LOG_CONFIG,
-    )
-    server_https = uvicorn.Server(config_https)
+    ssl_certfile = getattr(config, "SSL_FULLCHAIN_PEM", None)
+    ssl_keyfile = getattr(config, "SSL_PRIVKEY_PEM", None)
+
+    servers = [server_http]
+    if ssl_certfile and ssl_keyfile:
+        # Define HTTPS config - Lifespan disabled to avoid duplicate tasks/init
+        config_https = uvicorn.Config(
+            app,
+            host="0.0.0.0",
+            port=443,
+            log_level="info",
+            ssl_keyfile=ssl_keyfile,
+            ssl_certfile=ssl_certfile,
+            lifespan="off",
+            access_log=False,
+            log_config=LOG_CONFIG,
+        )
+        servers.append(uvicorn.Server(config_https))
+    else:
+        print("⚠️ SSL cert/key not configured; HTTPS server disabled.")
 
     # Async loop to run both
     async def serve():
-        await asyncio.gather(
-            server_http.serve(),
-            server_https.serve(),
-        )
+        await asyncio.gather(*(server.serve() for server in servers))
 
     # Run the event loop
     loop = asyncio.new_event_loop()
