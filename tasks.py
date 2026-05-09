@@ -1,5 +1,6 @@
 # tasks.py
 import asyncio
+from datetime import datetime, timedelta
 from traccar_client import TraccarClient
 from utils import get_balance_ussd
 
@@ -23,8 +24,24 @@ async def periodic_qssd_task(api_client: TraccarClient):
                 if dev.get("status") == "online":
                     dev_id = dev["id"]
                     try:
+                        attrs = dev.get("attributes", {})
+                        balance_ts = attrs.get("balance_ts")
+                        if balance_ts:
+                            last_check = None
+                            try:
+                                last_check = datetime.strptime(balance_ts, "%Y-%m-%d %H:%M:%S")
+                            except ValueError:
+                                try:
+                                    last_check = datetime.fromisoformat(balance_ts.replace("Z", "+00:00")).replace(tzinfo=None)
+                                except ValueError:
+                                    print(f"   -> Invalid balance_ts for {dev_id}: '{balance_ts}', proceeding.")
+
+                            if last_check and datetime.now() - last_check < timedelta(hours=6):
+                                print(f"   -> Skipped {dev_id}: balance checked recently at {balance_ts}")
+                                continue
+
                         # Try to get IMSI from attributes or top-level
-                        imsi = dev.get("attributes", {}).get("imsi") or dev.get("imsi")
+                        imsi = attrs.get("imsi") or dev.get("imsi")
                         ussd_code = get_balance_ussd(str(imsi)) if imsi else None
                         
                         if ussd_code:
