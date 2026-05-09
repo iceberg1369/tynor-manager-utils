@@ -20,9 +20,9 @@ def parse_ussd_message(raw_data: str) -> Optional[str]:
     if not raw_data:
         return None
 
-    # Regex to find content string in: +CUSD: 0, "<content>", 15  OR  CUSD: ...
-    # We capture anything inside quotes to also support plain text responses
-    match = re.search(r'\+?CUSD: \d+, "([^"]+)"', raw_data)
+    # Regex to find content string in: +CUSD: 0,"<content>",15 or CUSD: ...
+    # Some modules omit/shift spaces, so keep this tolerant.
+    match = re.search(r'\+?\s*CUSD:\s*\d+\s*,\s*"([^"]+)"', raw_data, re.IGNORECASE)
     if not match:
         return None
 

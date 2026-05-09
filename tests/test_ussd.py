@@ -22,4 +22,13 @@ credit_2 = extract_ussd_credit(decoded_2)
 print(f"Credit 2: {credit_2}")
 assert credit_2 == "1000"
 
+# Test 3: Hex Encoded with flexible spacing (SIMCOM style)
+raw_3 = ' CUSD: 1,"004500740065006200610072003A00370034002C003900320035005200690061006C000A00530068006500670065006600740061006E00670069007A003A0030005200690061006C", 7'
+print(f"\nTest 3 Input: {raw_3}")
+decoded_3 = parse_ussd_message(raw_3)
+print(f"Decoded 3: {decoded_3}")
+credit_3 = extract_ussd_credit(decoded_3)
+print(f"Credit 3: {credit_3}")
+assert credit_3 == "74925"
+
 print("\n✅ All Tests Passed!")
