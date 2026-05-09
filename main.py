@@ -13,6 +13,7 @@ from traccar_client import TraccarClient
 from services import DeviceService
 from tasks import periodic_qssd_task
 from tasks import periodic_getparams_task
+from tasks import periodic_getimsi_task
 from database import init_db
 from api.fota import router as fota_router
 from api.ussd import router as ussd_router
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     # Start Periodic Task
     qssd_task = asyncio.create_task(periodic_qssd_task(client))
     getparams_task = asyncio.create_task(periodic_getparams_task(client))
+    getimsi_task = asyncio.create_task(periodic_getimsi_task(client))
 
     # Initial Device Check & Command Sending
     try:
@@ -95,6 +97,8 @@ async def lifespan(app: FastAPI):
     #     qssd_task.cancel()
     if getparams_task:
         getparams_task.cancel()
+    if getimsi_task:
+        getimsi_task.cancel()
 
     # Wait for completion
     #await asyncio.gather(ws_task, qssd_task, getparams_task, return_exceptions=True)

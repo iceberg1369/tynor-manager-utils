@@ -107,8 +107,16 @@ class DeviceService:
     # Update IMSI
     # -----------------------------------------------------------
     async def update_imsi(self, device_id: int, imsi: str):
-        print(f"💾 Saving IMSI {imsi} for device {device_id}")
-        await self.client.update_device_attributes(device_id, {"imsi": imsi})
+        dev = await self.client.get_device(device_id)
+        current_imsi = str(dev.get("attributes", {}).get("imsi", "")).strip()
+        new_imsi = str(imsi).strip()
+
+        if current_imsi == new_imsi:
+            print(f"⏭️ IMSI unchanged for device {device_id}, skipping update.")
+            return
+
+        print(f"💾 Saving IMSI {new_imsi} for device {device_id} (was: {current_imsi or 'empty'})")
+        await self.client.update_device_attributes(device_id, {"imsi": new_imsi})
 
     # -----------------------------------------------------------
     # Generate Device Name (Python port of PHP logic)
