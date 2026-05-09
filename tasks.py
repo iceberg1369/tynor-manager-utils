@@ -101,3 +101,40 @@ async def periodic_getparams_task(api_client: TraccarClient):
 
         # Wait 6 hours
         await asyncio.sleep(6 * 3600)
+
+
+# -----------------------------------------------------------
+# Periodic Task: getimsi every 24 hours (first run after 24h)
+# checking if simcard changed?
+# -----------------------------------------------------------
+async def periodic_getimsi_task(api_client: TraccarClient):
+    print("\n🕒 periodic_getimsi_task scheduled. First run in 24 hours.")
+    await asyncio.sleep(24 * 3600)
+
+    while True:
+        try:
+            print("\n⏰ Executing periodic getimsi task...")
+            devices = await api_client.get_devices()
+
+            t950_devices = [
+                d for d in devices
+                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+            ]
+
+            count = 0
+            for dev in t950_devices:
+                if dev.get("status") == "online":
+                    dev_id = dev["id"]
+                    try:
+                        await api_client.send_command(dev_id, "getimsi")
+                        print(f"   -> Sent getimsi to {dev_id}")
+                        count += 1
+                    except Exception as e:
+                        print(f"   -> Failed to send getimsi to {dev_id}: {e}")
+
+            print(f"✅ Periodic getimsi task: Sent to {count} online devices.")
+
+        except Exception as e:
+            print(f"❌ Periodic getimsi task top-level error: {e}")
+
+        await asyncio.sleep(24 * 3600)
