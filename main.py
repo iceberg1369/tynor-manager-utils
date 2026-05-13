@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 
     client = TraccarClient(config.BASE_URL, config.TOKEN, verify_ssl=False)
     app.state.client = client
-    
+       
     # Initialize service
     service = DeviceService(client)
 
