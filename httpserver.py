@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import config
 from api.fota import router as fota_router
-from api.ussd import router as ussd_router
+from api.ussd_parser import router as ussd_router
 from api.auth import router as auth_router
 from api.device import router as device_router
 

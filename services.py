@@ -108,15 +108,32 @@ class DeviceService:
     # -----------------------------------------------------------
     async def update_imsi(self, device_id: int, imsi: str):
         dev = await self.client.get_device(device_id)
-        current_imsi = str(dev.get("attributes", {}).get("imsi", "")).strip()
+        attrs = dev.get("attributes", {})
+        current_imsi = str(attrs.get("imsi", "")).strip()
         new_imsi = str(imsi).strip()
 
         if current_imsi == new_imsi:
             print(f"⏭️ IMSI unchanged for device {device_id}, skipping update.")
             return
 
+        # IMSI changed => clear SIMCARD No so it can be re-discovered.
+        for key in ("SIMCARD No", "simcard_no", "simcardNo", "simcard"):
+            attrs.pop(key, None)
+        attrs["imsi"] = new_imsi
+
         print(f"💾 Saving IMSI {new_imsi} for device {device_id} (was: {current_imsi or 'empty'})")
-        await self.client.update_device_attributes(device_id, {"imsi": new_imsi})
+        payload = {
+            "id": device_id,
+            "name": dev["name"],
+            "uniqueId": dev["uniqueId"],
+            "status": dev.get("status"),
+            "model": dev.get("model"),
+            "groupId": dev.get("groupId"),
+            "contact": dev.get("contact"),
+            "category": dev.get("category"),
+            "attributes": attrs,
+        }
+        await self.client.update_device(device_id, payload)
 
     # -----------------------------------------------------------
     # Generate Device Name (Python port of PHP logic)
@@ -317,6 +334,17 @@ class DeviceService:
                     imsi = result.split(":", 1)[1].strip()
                     if imsi.isdigit():
                         asyncio.create_task(self.update_imsi(device_id, imsi))
+                    continue
+
+                # Device password response
+                if result.startswith("PASS:"):
+                    device_password = result.split(":", 1)[1].strip()
+                    if device_password:
+                        asyncio.create_task(
+                            self.client.update_device_attributes(
+                                device_id, {"Device Password": device_password}
+                            )
+                        )
                     continue
 
                 if result.startswith("{\"cmd\":29"):

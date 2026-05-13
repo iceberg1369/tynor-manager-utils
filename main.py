@@ -11,9 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import config
 from traccar_client import TraccarClient
 from services import DeviceService
-from tasks import periodic_qssd_task
+from tasks import periodic_sim_balance_qssd_task
+from tasks import periodic_simcard_no_task
 from tasks import periodic_getparams_task
 from tasks import periodic_getimsi_task
+from tasks import periodic_getpass_task
 from database import init_db
 from api.fota import router as fota_router
 from api.ussd import router as ussd_router
@@ -47,9 +49,11 @@ async def lifespan(app: FastAPI):
     ws_task = asyncio.create_task(client.listen_socket(on_message=service.handle_ws_message))
 
     # Start Periodic Task
-    qssd_task = asyncio.create_task(periodic_qssd_task(client))
+    qssd_task = asyncio.create_task(periodic_sim_balance_qssd_task(client))
+    simcard_no_task = asyncio.create_task(periodic_simcard_no_task(client))
     getparams_task = asyncio.create_task(periodic_getparams_task(client))
     getimsi_task = asyncio.create_task(periodic_getimsi_task(client))
+    getpass_task = asyncio.create_task(periodic_getpass_task(client))
 
     # Initial Device Check & Command Sending
     try:
@@ -95,10 +99,14 @@ async def lifespan(app: FastAPI):
         ws_task.cancel()
     # if qssd_task:
     #     qssd_task.cancel()
+    if simcard_no_task:
+        simcard_no_task.cancel()
     if getparams_task:
         getparams_task.cancel()
     if getimsi_task:
         getimsi_task.cancel()
+    if getpass_task:
+        getpass_task.cancel()
 
     # Wait for completion
     #await asyncio.gather(ws_task, qssd_task, getparams_task, return_exceptions=True)

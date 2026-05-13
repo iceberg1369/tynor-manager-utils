@@ -7,7 +7,7 @@ from utils import get_balance_ussd
 # -----------------------------------------------------------
 # Periodic Task: Send qssd every 6 hours
 # -----------------------------------------------------------
-async def periodic_qssd_task(api_client: TraccarClient):
+async def periodic_sim_balance_qssd_task(api_client: TraccarClient):
     while True:
         try:
             print("\n⏰ Executing periodic QSSD command task...")
@@ -67,6 +67,51 @@ async def periodic_qssd_task(api_client: TraccarClient):
         await asyncio.sleep(6 * 3600)
 
 
+# -----------------------------------------------------------
+# Periodic Task: Send SIMCARD NO USSD when SIMCARD No is missing
+# -----------------------------------------------------------
+async def periodic_simcard_no_task(api_client: TraccarClient):
+    await asyncio.sleep(6 * 3600)
+    while True:
+        try:
+            print("\n⏰ Executing periodic SIMCARD No check task...")
+            devices = await api_client.get_devices()
+
+            t950_devices = [
+                d for d in devices
+                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+            ]
+
+            count = 0
+            for dev in t950_devices:
+                if dev.get("status") == "online":
+                    dev_id = dev["id"]
+                    try:
+                        attrs = dev.get("attributes", {})
+                        simcard_no = (
+                            attrs.get("SIMCARD No")
+                            or attrs.get("simcard_no")
+                            or attrs.get("simcardNo")
+                            or attrs.get("simcard")
+                        )
+
+                        if simcard_no:
+                            print(f"   -> Skipped {dev_id}: SIMCARD No is present")
+                            continue
+
+                        await api_client.send_command(dev_id, "qssd:*733*2#")
+                        print(f"   -> Sent qssd:*733*2# to {dev_id} (SIMCARD No missing)")
+                        count += 1
+                    except Exception as e:
+                        print(f"   -> Failed SIMCARD No check for {dev_id}: {e}")
+
+            print(f"✅ Periodic SIMCARD No task: Sent to {count} online devices.")
+        except Exception as e:
+            print(f"❌ Periodic SIMCARD No task top-level error: {e}")
+
+        await asyncio.sleep(6 * 3600)
+
+
 
 # -----------------------------------------------------------
 # Periodic Task: getparams every 6 hours
@@ -105,10 +150,7 @@ async def periodic_getparams_task(api_client: TraccarClient):
 
 # -----------------------------------------------------------
 # Periodic Task: getimsi every 24 hours (first run after 24h)
-<<<<<<< HEAD
 # checking if simcard changed?
-=======
->>>>>>> 0c4a70f6df03550356377b197fed4429dfe71cf5
 # -----------------------------------------------------------
 async def periodic_getimsi_task(api_client: TraccarClient):
     print("\n🕒 periodic_getimsi_task scheduled. First run in 24 hours.")
@@ -141,3 +183,38 @@ async def periodic_getimsi_task(api_client: TraccarClient):
             print(f"❌ Periodic getimsi task top-level error: {e}")
 
         await asyncio.sleep(24 * 3600)
+
+
+# -----------------------------------------------------------
+# Periodic Task: getpass every week
+# -----------------------------------------------------------
+async def periodic_getpass_task(api_client: TraccarClient):
+    print("\n🕒 periodic_getpass_task scheduled. First run in 7 days.")
+    await asyncio.sleep(7 * 24 * 3600)
+
+    while True:
+        try:
+            print("\n⏰ Executing periodic getpass task...")
+            devices = await api_client.get_devices()
+
+            t950_devices = [
+                d for d in devices
+                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+            ]
+
+            count = 0
+            for dev in t950_devices:
+                if dev.get("status") == "online":
+                    dev_id = dev["id"]
+                    try:
+                        await api_client.send_command(dev_id, "getpass")
+                        print(f"   -> Sent getpass to {dev_id}")
+                        count += 1
+                    except Exception as e:
+                        print(f"   -> Failed to send getpass to {dev_id}: {e}")
+
+            print(f"✅ Periodic getpass task: Sent to {count} online devices.")
+        except Exception as e:
+            print(f"❌ Periodic getpass task top-level error: {e}")
+
+        await asyncio.sleep(7 * 24 * 3600)

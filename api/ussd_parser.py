@@ -67,6 +67,26 @@ def extract_ussd_credit(message: str) -> Optional[str]:
         return clean_num
     return None
 
+def extract_simcard_no(message: str) -> Optional[str]:
+    """
+    Extract SIMCARD number from USSD message.
+    Expected pattern is a line starting with: 1.<number>
+    """
+    if not message:
+        return None
+
+    # Preferred: number is on its own line after "1."
+    line_match = re.search(r'(?m)^\s*1\.\s*([0-9]{10,})\s*$', message)
+    if line_match:
+        return line_match.group(1)
+
+    # Fallback: match anywhere in message.
+    any_match = re.search(r'1\.\s*([0-9]{10,})', message)
+    if any_match:
+        return any_match.group(1)
+
+    return None
+
 
 # -----------------------------------------------------------
 # Route Handler
@@ -118,6 +138,22 @@ async def handle_qussd(request: Request):
         
         if decoded_msg:
             print(f"   ✅ [USSD MSG]: {decoded_msg}")
+
+            simcard_no = extract_simcard_no(decoded_msg)
+            if simcard_no:
+                print(f"   📱 [SIMCARD NO]: {simcard_no}")
+                if imei and client:
+                    try:
+                        devs = await client.get_devices(params={"uniqueId": imei})
+                        if devs:
+                            dev_obj = devs[0]
+                            d_id = dev_obj["id"]
+                            await client.update_device_attributes(d_id, {"SIMCARD No": simcard_no})
+                            print(f"   ✅ [SIMCARD NO SAVED] Device {d_id} : {simcard_no}")
+                        else:
+                            print(f"   ⚠️ Device not found for IMEI: {imei}")
+                    except Exception as e:
+                        print(f"   ❌ Failed to sync SIMCARD No to device: {e}")
             
             # Extract Credit Balance
             credit_amount = extract_ussd_credit(decoded_msg)
