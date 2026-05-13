@@ -105,7 +105,10 @@ async def periodic_getparams_task(api_client: TraccarClient):
 
 # -----------------------------------------------------------
 # Periodic Task: getimsi every 24 hours (first run after 24h)
+<<<<<<< HEAD
 # checking if simcard changed?
+=======
+>>>>>>> 0c4a70f6df03550356377b197fed4429dfe71cf5
 # -----------------------------------------------------------
 async def periodic_getimsi_task(api_client: TraccarClient):
     print("\n🕒 periodic_getimsi_task scheduled. First run in 24 hours.")
