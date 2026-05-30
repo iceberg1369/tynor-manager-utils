@@ -75,9 +75,13 @@ def start_server(lifespan):
     else:
         print("⚠️ SSL cert/key not configured; HTTPS server disabled.")
 
-    # Async loop to run both
+    # Track the server tasks so their exceptions can be retrieved on shutdown.
+    server_tasks = []
+
     async def serve():
-        await asyncio.gather(*(server.serve() for server in servers))
+        for server in servers:
+            server_tasks.append(asyncio.ensure_future(server.serve()))
+        await asyncio.gather(*server_tasks)
 
     # Run the event loop
     loop = asyncio.new_event_loop()
@@ -85,6 +89,22 @@ def start_server(lifespan):
     try:
         loop.run_until_complete(serve())
     except KeyboardInterrupt:
-        pass
+        print("\n🛑 Shutdown signal received.")
     finally:
+        # uvicorn catches the signal, runs the lifespan shutdown, then re-raises
+        # it as KeyboardInterrupt — which leaves the server task holding an
+        # un-retrieved exception and other tasks still pending. Drain both so the
+        # process exits cleanly without asyncio warnings.
+        for task in server_tasks:
+            if task.done() and not task.cancelled():
+                task.exception()
+
+        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+        loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
+        print("👋 Server stopped.")

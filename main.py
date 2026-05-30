@@ -18,7 +18,7 @@ from tasks import periodic_getimsi_task
 from tasks import periodic_getpass_task
 from database import init_db
 from api.fota import router as fota_router
-from api.ussd import router as ussd_router
+from api.ussd_parser import router as ussd_router
 from api.auth import router as auth_router
 from api.device import router as device_router
 import ftp_server
@@ -43,6 +43,10 @@ async def lifespan(app: FastAPI):
        
     # Initialize service
     service = DeviceService(client)
+
+    # Pre-fetch the device list BEFORE the WS listener starts, so any
+    # deviceOnline event for an unknown device is correctly flagged as new.
+    await service.load_known_devices()
 
     # Start WebSocket
     # We pass the service.handle_ws_message as the callback
@@ -97,8 +101,8 @@ async def lifespan(app: FastAPI):
     
     if ws_task:
         ws_task.cancel()
-    # if qssd_task:
-    #     qssd_task.cancel()
+    if qssd_task:
+        qssd_task.cancel()
     if simcard_no_task:
         simcard_no_task.cancel()
     if getparams_task:
@@ -108,8 +112,16 @@ async def lifespan(app: FastAPI):
     if getpass_task:
         getpass_task.cancel()
 
-    # Wait for completion
-    #await asyncio.gather(ws_task, qssd_task, getparams_task, return_exceptions=True)
+    # Wait for completion of cancelled tasks to avoid "Task was destroyed" warnings
+    await asyncio.gather(
+        ws_task,
+        qssd_task,
+        simcard_no_task,
+        getparams_task,
+        getimsi_task,
+        getpass_task,
+        return_exceptions=True
+    )
 
     if client:
         await client.close()

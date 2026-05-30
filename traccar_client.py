@@ -12,10 +12,13 @@ class TraccarClient:
         self._verify_ssl = verify_ssl
         self._session = session
         self._closed_session = False
+        self._ws_message_count = 0
 
     async def _get_session(self):
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            # unsafe=True keeps cookies from IP-address hosts; the default jar
+            # drops them, which would lose the JSESSIONID needed by the socket.
+            self._session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
             self._closed_session = True
         return self._session
 
@@ -174,20 +177,48 @@ class TraccarClient:
 
         while True:
             sess = await self._get_session()
-            url = f"{self._base_url}/socket?token={self._token}"
+
+            # Traccar binds the WebSocket to the HTTP session (JSESSIONID cookie),
+            # not the ?token= query param. Without a logged-in session the socket
+            # handshake still succeeds but no positions/events are ever streamed.
+            # Logging in here sets the cookie on the shared ClientSession, which
+            # ws_connect then reuses.
+            try:
+                login_url = f"{self._base_url}/session?token={self._token}"
+                async with sess.get(login_url, ssl=self._verify_ssl) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        raise RuntimeError(f"session auth {resp.status}: {text}")
+                print("🔑 WebSocket session authenticated.")
+            except Exception as e:
+                print(f"❌ WS session auth failed: {e}")
+                print(f"♻️ Retrying in {backoff} seconds...")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+                continue
+
+            url = f"{self._base_url}/socket"
             print(f"🔗 Connecting WebSocket: {url}")
 
             try:
-                async with sess.ws_connect(url, ssl=self._verify_ssl) as ws:
+                async with sess.ws_connect(url, ssl=self._verify_ssl, heartbeat=None, autoping=True) as ws:
                     print("✅ WebSocket connected.")
                     backoff = 1  # reset on success
 
                     async for msg in ws:
+                        self._ws_message_count += 1
+                        data_size = len(msg.data) if isinstance(msg.data, str) else "-"
+                        #print(f"📩 WS message #{self._ws_message_count}: type={msg.type} size={data_size}")
+
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             if on_message:
                                 result = on_message(msg.data)
                                 if asyncio.iscoroutine(result):
-                                    await result
+                                    asyncio.create_task(result)
+                        elif msg.type == aiohttp.WSMsgType.PING:
+                            print("🏓 WS ping received")
+                        elif msg.type == aiohttp.WSMsgType.PONG:
+                            print("🏓 WS pong received")
 
                         elif msg.type == aiohttp.WSMsgType.ERROR:
                             print("❌ WS internal error:", ws.exception())

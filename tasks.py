@@ -5,6 +5,50 @@ from traccar_client import TraccarClient
 from utils import get_balance_ussd
 
 # -----------------------------------------------------------
+# Per-device action: send balance-check USSD (respects 6h recency)
+# -----------------------------------------------------------
+async def sim_balance_qssd_for_device(api_client: TraccarClient, dev: dict) -> bool:
+    """Send the balance-check USSD (qssd:<ussd>) for a single device.
+
+    Skips if the balance was checked within the last 6 hours. If no IMSI is on
+    file, requests it via getimsi instead. Returns True if a balance USSD was sent.
+    """
+    dev_id = dev["id"]
+    attrs = dev.get("attributes", {})
+
+    balance_ts = attrs.get("balance_ts")
+    if balance_ts:
+        last_check = None
+        try:
+            last_check = datetime.strptime(balance_ts, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            try:
+                last_check = datetime.fromisoformat(balance_ts.replace("Z", "+00:00")).replace(tzinfo=None)
+            except ValueError:
+                print(f"   -> Invalid balance_ts for {dev_id}: '{balance_ts}', proceeding.")
+
+        if last_check and datetime.now() - last_check < timedelta(hours=6):
+            print(f"   -> Skipped {dev_id}: balance checked recently at {balance_ts}")
+            return False
+
+    # Try to get IMSI from attributes or top-level
+    imsi = attrs.get("imsi") or dev.get("imsi")
+    ussd_code = get_balance_ussd(str(imsi)) if imsi else None
+
+    if ussd_code:
+        await api_client.send_command(dev_id, f"qssd:{ussd_code}")
+        print(f"   -> Sent qssd:{ussd_code} to {dev_id}")
+        return True
+
+    if not imsi:
+        print(f"   -> No IMSI for {dev_id}, requesting IMSI...")
+        await api_client.send_command(dev_id, "getimsi")
+    else:
+        print(f"   -> Skipped {dev_id}: No USSD code found for IMSI '{imsi}'")
+    return False
+
+
+# -----------------------------------------------------------
 # Periodic Task: Send qssd every 6 hours
 # -----------------------------------------------------------
 async def periodic_sim_balance_qssd_task(api_client: TraccarClient):
@@ -22,42 +66,12 @@ async def periodic_sim_balance_qssd_task(api_client: TraccarClient):
             count = 0
             for dev in t950_devices:
                 if dev.get("status") == "online":
-                    dev_id = dev["id"]
                     try:
-                        attrs = dev.get("attributes", {})
-                        balance_ts = attrs.get("balance_ts")
-                        if balance_ts:
-                            last_check = None
-                            try:
-                                last_check = datetime.strptime(balance_ts, "%Y-%m-%d %H:%M:%S")
-                            except ValueError:
-                                try:
-                                    last_check = datetime.fromisoformat(balance_ts.replace("Z", "+00:00")).replace(tzinfo=None)
-                                except ValueError:
-                                    print(f"   -> Invalid balance_ts for {dev_id}: '{balance_ts}', proceeding.")
-
-                            if last_check and datetime.now() - last_check < timedelta(hours=6):
-                                print(f"   -> Skipped {dev_id}: balance checked recently at {balance_ts}")
-                                continue
-
-                        # Try to get IMSI from attributes or top-level
-                        imsi = attrs.get("imsi") or dev.get("imsi")
-                        ussd_code = get_balance_ussd(str(imsi)) if imsi else None
-                        
-                        if ussd_code:
-                            await api_client.send_command(dev_id, f"qssd:{ussd_code}")
-                            print(f"   -> Sent qssd:{ussd_code} to {dev_id}")
+                        if await sim_balance_qssd_for_device(api_client, dev):
                             count += 1
-                        else:
-                            if not imsi:
-                                print(f"   -> No IMSI for {dev_id}, requesting IMSI...")
-                                await api_client.send_command(dev_id, "getimsi")
-                            else:
-                                print(f"   -> Skipped {dev_id}: No USSD code found for IMSI '{imsi}'")
-                            
                     except Exception as e:
-                        print(f"   -> Failed to send to {dev_id}: {e}")
-            
+                        print(f"   -> Failed to send to {dev['id']}: {e}")
+
             print(f"✅ Periodic task: Sent to {count} online devices.")
 
         except Exception as e:
@@ -65,6 +79,32 @@ async def periodic_sim_balance_qssd_task(api_client: TraccarClient):
 
         # Wait 6 hours
         await asyncio.sleep(6 * 3600)
+
+
+# -----------------------------------------------------------
+# Per-device action: request SIMCARD No via USSD when it's missing
+# -----------------------------------------------------------
+async def simcard_no_check_for_device(api_client: TraccarClient, dev: dict) -> bool:
+    """Send the SIMCARD No USSD (qssd:*733*2#) for a single device if it's missing.
+
+    Returns True if the USSD was sent, False if SIMCARD No is already on file.
+    """
+    dev_id = dev["id"]
+    attrs = dev.get("attributes", {})
+    simcard_no = (
+        attrs.get("SIMCARD No")
+        or attrs.get("simcard_no")
+        or attrs.get("simcardNo")
+        or attrs.get("simcard")
+    )
+
+    if simcard_no:
+        print(f"   -> Skipped {dev_id}: SIMCARD No is present")
+        return False
+
+    await api_client.send_command(dev_id, "qssd:*733*2#")
+    print(f"   -> Sent qssd:*733*2# to {dev_id} (SIMCARD No missing)")
+    return True
 
 
 # -----------------------------------------------------------
@@ -85,25 +125,11 @@ async def periodic_simcard_no_task(api_client: TraccarClient):
             count = 0
             for dev in t950_devices:
                 if dev.get("status") == "online":
-                    dev_id = dev["id"]
                     try:
-                        attrs = dev.get("attributes", {})
-                        simcard_no = (
-                            attrs.get("SIMCARD No")
-                            or attrs.get("simcard_no")
-                            or attrs.get("simcardNo")
-                            or attrs.get("simcard")
-                        )
-
-                        if simcard_no:
-                            print(f"   -> Skipped {dev_id}: SIMCARD No is present")
-                            continue
-
-                        await api_client.send_command(dev_id, "qssd:*733*2#")
-                        print(f"   -> Sent qssd:*733*2# to {dev_id} (SIMCARD No missing)")
-                        count += 1
+                        if await simcard_no_check_for_device(api_client, dev):
+                            count += 1
                     except Exception as e:
-                        print(f"   -> Failed SIMCARD No check for {dev_id}: {e}")
+                        print(f"   -> Failed SIMCARD No check for {dev['id']}: {e}")
 
             print(f"✅ Periodic SIMCARD No task: Sent to {count} online devices.")
         except Exception as e:

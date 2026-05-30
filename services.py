@@ -1,4 +1,5 @@
 import json
+import re
 import asyncio
 from typing import Optional
 from collections import deque
@@ -22,6 +23,90 @@ class DeviceService:
         self.client = client
         self.recent_event_ids = deque(maxlen=100)
         self.device_names = {}
+        self.known_device_ids: set = set()
+
+    async def load_known_devices(self):
+        """Pre-fetch the current device list so we can detect newly added ones later."""
+        devices = await self.client.get_devices()
+        self.known_device_ids = {d["id"] for d in devices if d.get("id")}
+        print(f"✅ Pre-fetched {len(self.known_device_ids)} known devices.")
+
+    # -----------------------------------------------------------
+    # Handle a device coming online — detect newly added devices
+    # -----------------------------------------------------------
+    async def _handle_device_online(self, device_id: int):
+        if not device_id or device_id in self.known_device_ids:
+            return
+        self.known_device_ids.add(device_id)
+        try:
+            dev = await self.client.get_device(device_id)
+        except Exception as e:
+            print(f"❌ Failed to fetch new device {device_id}: {e}")
+            return
+
+        print(f"\n🆕 New device detected — ID:{device_id}")
+        print(dev)
+
+        # Kick off the new-device provisioning sequence. It starts by asking the
+        # device for its firmware/model (getver) after a 2-minute settle delay.
+        asyncio.create_task(self._provision_new_device(device_id))
+
+    # -----------------------------------------------------------
+    # New-device provisioning sequence
+    # -----------------------------------------------------------
+    async def _provision_new_device(self, device_id: int, delay: int = 120):
+        """Wait for the device to settle, then request its version.
+
+        The `getver` response (handled in `handle_version_response`) drives the
+        rest of the command sequence.
+        """
+        await asyncio.sleep(delay)
+        try:
+            await self.client.send_command(device_id, "getver")
+            print(f"📦 Sent getver to new device {device_id} (after {delay}s)")
+        except Exception as e:
+            print(f"❌ Failed to send getver to {device_id}: {e}")
+
+    # -----------------------------------------------------------
+    # Handle getver response: "VERSION:2.1.0d MODEL:50/2"
+    # -----------------------------------------------------------
+    async def handle_version_response(self, device_id: int, result: str):
+        m = re.search(r"VERSION:\s*(\S+)\s+MODEL:\s*(\S+)", result)
+        if not m:
+            print(f"⚠️ Could not parse getver response for {device_id}: {result!r}")
+            return
+
+        version, model = m.group(1), m.group(2)
+        print(f"🔖 Device {device_id} version={version} model={model}")
+
+        await self.client.update_device_attributes(
+            device_id, {"firmware": version, "hw_model": model}
+        )
+
+        # If we don't yet have the SIM's IMSI on file, ask the device for it.
+        dev = await self.client.get_device(device_id)
+        imsi = str(dev.get("attributes", {}).get("imsi", "")).strip()
+        if not imsi:
+            try:
+                await self.client.send_command(device_id, "getimsi")
+                print(f"📨 No IMSI on file — sent getimsi to device {device_id}")
+            except Exception as e:
+                print(f"❌ Failed to send getimsi to {device_id}: {e}")
+        else:
+            print(f"⏭️ IMSI already known for device {device_id} ({imsi}) — running SIM provisioning")
+            # IMSI is on file, so run the SIM-card discovery steps for this device:
+            # request the SIMCARD No (if missing) and a balance check.
+            from tasks import simcard_no_check_for_device, sim_balance_qssd_for_device
+            try:
+                await simcard_no_check_for_device(self.client, dev)
+            except Exception as e:
+                print(f"❌ simcard_no_check failed for {device_id}: {e}")
+            try:
+                await sim_balance_qssd_for_device(self.client, dev)
+            except Exception as e:
+                print(f"❌ sim_balance_qssd failed for {device_id}: {e}")
+
+        # TODO: continue the provisioning command sequence here.
 
     async def get_device_name(self, device_id: int):
         if not device_id:
@@ -134,6 +219,20 @@ class DeviceService:
             "attributes": attrs,
         }
         await self.client.update_device(device_id, payload)
+
+        # IMSI just changed (SIMCARD No was cleared above), so kick off SIM-card
+        # discovery right away: request the SIMCARD No and a balance check.
+        # `dev["attributes"]` is `attrs`, which already reflects the new IMSI and
+        # the cleared SIMCARD No, so the helpers act on fresh state.
+        from tasks import simcard_no_check_for_device, sim_balance_qssd_for_device
+        try:
+            await simcard_no_check_for_device(self.client, dev)
+        except Exception as e:
+            print(f"❌ simcard_no_check failed for {device_id}: {e}")
+        try:
+            await sim_balance_qssd_for_device(self.client, dev)
+        except Exception as e:
+            print(f"❌ sim_balance_qssd failed for {device_id}: {e}")
 
     # -----------------------------------------------------------
     # Generate Device Name (Python port of PHP logic)
@@ -250,6 +349,10 @@ class DeviceService:
         try:
             data = json.loads(msg)
 
+            positions = data.get("positions", [])
+            # if positions:
+            #     print(f"📍 WS positions batch received: {len(positions)}")
+
             for device in data.get("devices", []):
                 device_id = device.get("id")
                 device_name = device.get("name", "")
@@ -262,13 +365,18 @@ class DeviceService:
             # print(f"\n📨 WS Message: {len(data['events'])} events")
 
             for event in data["events"]:
+                device_id = event.get("deviceId")
+                event_id = event.get("id")
+                event_type = event.get("type")
+
+                if event_type == "deviceOnline":
+                    asyncio.create_task(self._handle_device_online(device_id))
+                    continue
+
                 attrs = event.get("attributes", {})
                 result = attrs.get("result")
                 if not result:
                     continue
-
-                device_id = event.get("deviceId")
-                event_id = event.get("id")
 
                 if event_id and event_id in self.recent_event_ids:
                     #print(f"   🛑 Skipping duplicate event {event_id}")
@@ -327,6 +435,11 @@ class DeviceService:
                 if result.startswith("New value"):
                     params = result[len("New value"):].strip()
                     asyncio.create_task(self.update_trackerparams(device_id, params))
+                    continue
+
+                # VERSION RESPONSE (getver): "VERSION:2.1.0d MODEL:50/2"
+                if result.startswith("VERSION:"):
+                    asyncio.create_task(self.handle_version_response(device_id, result))
                     continue
 
                 # IMSI RESPONSE
