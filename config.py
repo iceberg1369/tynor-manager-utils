@@ -9,5 +9,5 @@ APP_HASH_KEY = "myapphashkeyhere"
 CLIENT_SECRET = "dfgdfgdfg"
 
 # SSL Certificates
-#SSL_FULLCHAIN_PEM = "/etc/letsencrypt/live/register.niktivan.ir/fullchain.pem"
-#SSL_PRIVKEY_PEM   = "/etc/letsencrypt/live/register.niktivan.ir/privkey.pem"
+SSL_FULLCHAIN_PEM = "/etc/letsencrypt/live/register.niktivan.ir/fullchain.pem"
+SSL_PRIVKEY_PEM   = "/etc/letsencrypt/live/register.niktivan.ir/privkey.pem"

@@ -15,6 +15,7 @@ def device_type_to_model(device_type):
     if dt == 120: return "TYNOR-T120"
     if dt == 90: return "TYNOR-T900"
     if dt == 95: return "TYNOR-T950"
+    if dt == 50: return "TYNOR-T950"
     if dt == 92: return "TYNOR-T920"
     return "unknown"
 
