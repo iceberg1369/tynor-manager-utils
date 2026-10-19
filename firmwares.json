@@ -4,7 +4,26 @@
         "device": 90,
         "firmware": 131081,
         "rev": 2,
-        "download_path": "ftp://avl:123456@tracking3.niktivan.ir/90/131081/2",
+        "download_path": "ftp://avl:123456@tracking3.niktivan.ir/90/131081/1",
         "date": "2020-02-19 12:56:13"
-    }
+    },
+
+{
+    "id": 5,
+    "device": 90,
+    "firmware": 131329,
+    "rev": 1,
+    "download_path": "ftp://avl:123456@185.97.119.27/90/131329/1",
+    "date": "2026-07-22 09:31:44"
+},
+
+{
+    "id": 0,
+    "device": 50,
+    "firmware": 131330,
+    "rev": 2,
+    "download_path": "ftp://avl:123456@185.97.119.27/50/131330/1",
+    "date": "2026-08-22 14:05:53"
+}
+
 ]
