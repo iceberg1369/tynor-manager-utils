@@ -8,6 +8,19 @@ from traccar_client import TraccarClient
 
 router = APIRouter()
 
+
+def owner_msisdn(phone: str) -> str:
+    """The tracker texts its alarms to the owner, so it needs the international
+    form (98XXXXXXXXXX). The app logs in with "9XXXXXXXXX" (it strips +98)."""
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if digits.startswith("0098"):
+        return digits[2:]
+    if digits.startswith("0") and len(digits) == 11:
+        return "98" + digits[1:]
+    if digits.startswith("9") and len(digits) == 10:
+        return "98" + digits
+    return digits
+
 class DeviceRequest(BaseModel):
     user: str = None
     imei: str = None
@@ -126,7 +139,7 @@ async def handle_device_request(request: Request):
     cmd_data = {
         "c": 29,
         "param": {
-            "owner": user,
+            "owner": owner_msisdn(user),
             "devicePassword": device_password
         }
     }
