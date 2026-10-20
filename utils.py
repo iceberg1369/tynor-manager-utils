@@ -15,8 +15,10 @@ def parse_params(s: str):
         if ":" not in part:
             continue
         k, v = part.split(":", 1)
+        # setparam replies put a space after each ';' ("New value 11600:1; 21600:1;")
+        k = k.strip()
         if k.isdigit():
-            out[int(k)] = v
+            out[int(k)] = v.strip()
     return out
 
 

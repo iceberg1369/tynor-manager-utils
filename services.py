@@ -161,8 +161,11 @@ class DeviceService:
     # Save TRACKERPARAMS (READ: Param ID:.... Value:...)
     # -----------------------------------------------------------
     async def save_trackerparams(self, device_id: int, params: str):
-        print(f"💾 Saving TRACKERPARAMS (full) for device {device_id}")
-        await self.client.update_device_attributes(device_id, {"trackerparams": params})
+        # A getparam reply holds only the ids that were asked for. Merge it into
+        # the stored set: replacing it let a query for a few ids wipe the rest,
+        # and the app shows this copy while the tracker is offline.
+        print(f"💾 Saving TRACKERPARAMS (merged) for device {device_id}")
+        await self.update_trackerparams(device_id, params)
 
     # -----------------------------------------------------------
     # Update TRACKERPARAMS (WRITE: New value 2001:aaa;2002:bbb)
@@ -184,8 +187,6 @@ class DeviceService:
 
         print(f"✅ Updated trackerparams for device {device_id}")
         print(merged)
-
-        await self.client.update_device_attributes(device_id, {"trackerparams": merged})
 
         await self.client.update_device_attributes(device_id, {"trackerparams": merged})
 
