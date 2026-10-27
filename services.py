@@ -3,9 +3,8 @@ import re
 import asyncio
 from typing import Optional
 from collections import deque
-from utils import parse_params
+from utils import parse_params, model_from_sn
 from datetime import datetime
-from utils import parse_params
 from traccar_client import TraccarClient
 
 # Helper function for device type mapping
@@ -314,8 +313,13 @@ class DeviceService:
             else:
                  new_name = f"Device {device_id}" # Fallback
             
-            # Map Model
-            new_model = device_type_to_model(device_type) if device_type else dev.get("model")
+            # Map Model: the S/N scanned at registration says it; otherwise
+            # the tracker's dm does, unless it's one we don't know
+            new_model = model_from_sn(attrs.get("sn"))
+            if not new_model:
+                new_model = device_type_to_model(device_type) if device_type else dev.get("model")
+                if new_model == "unknown" and dev.get("model"):
+                    new_model = dev.get("model")
             
             # Update Attributes
             if "registrationDate" not in attrs:

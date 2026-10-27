@@ -22,6 +22,13 @@ def parse_params(s: str):
     return out
 
 
+def model_from_sn(sn) -> str | None:
+    """The model the serial number on the box stands for: S/N 95... is a T950."""
+    if sn and str(sn).strip().startswith("95"):
+        return "TYNOR-T950"
+    return None
+
+
 def is_imei(s: str) -> bool:
     """
     Check if string looks like an IMEI (15 digits).

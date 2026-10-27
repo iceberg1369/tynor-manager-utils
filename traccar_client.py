@@ -125,7 +125,7 @@ class TraccarClient:
     # -----------------------------------------------------------
     # Update only attributes (safe: retrieves full object first)
     # -----------------------------------------------------------
-    async def update_device_attributes(self, device_id: int, new_attrs: dict):
+    async def update_device_attributes(self, device_id: int, new_attrs: dict, model: str = None):
         dev = await self.get_device(device_id)
 
         attrs = dev.get("attributes", {})
@@ -136,7 +136,7 @@ class TraccarClient:
             "name": dev["name"],
             "uniqueId": dev["uniqueId"],
             "status": dev.get("status"),
-            "model": dev.get("model"),
+            "model": model or dev.get("model"),
             "groupId": dev.get("groupId"),
             "contact": dev.get("contact"),
             "category": dev.get("category"),

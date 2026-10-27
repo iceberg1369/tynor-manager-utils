@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 import config
-from utils import is_imei
+from utils import is_imei, model_from_sn
 from traccar_client import TraccarClient
 
 router = APIRouter()
@@ -40,6 +40,7 @@ async def handle_device_request(request: Request):
     imei = body.get('imei')
     frmUser = body.get('from')
     device_password = body.get('dp')
+    sn = (body.get('sn') or "").strip()
     client_secret = body.get('client_secret')
 
     # 1. Validate existence
@@ -134,6 +135,14 @@ async def handle_device_request(request: Request):
             'success': False,
             'message': "device already registered"
         }
+
+    # 7b. Keep the S/N on the device, and the model it stands for (S/N 95...
+    # is a T950), which the registration reply then leaves alone
+    if sn:
+        try:
+            await client.update_device_attributes(device['id'], {"sn": sn}, model=model_from_sn(sn))
+        except Exception as e:
+            print(f"Failed to save S/N/model: {e}")
 
     # 8. Send Command to the device
     cmd_data = {
