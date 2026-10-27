@@ -240,17 +240,8 @@ class DeviceService:
         attrs["imsi"] = new_imsi
 
         print(f"💾 Saving IMSI {new_imsi} for device {device_id} (was: {current_imsi or 'empty'})")
-        payload = {
-            "id": device_id,
-            "name": dev["name"],
-            "uniqueId": dev["uniqueId"],
-            "status": dev.get("status"),
-            "model": dev.get("model"),
-            "groupId": dev.get("groupId"),
-            "contact": dev.get("contact"),
-            "category": dev.get("category"),
-            "attributes": attrs,
-        }
+        # the whole device: traccar's PUT clears any field left out (phone, ...)
+        payload = {**dev, "attributes": attrs}
         await self.client.update_device(device_id, payload)
 
         # IMSI just changed (SIMCARD No was cleared above), so kick off SIM-card
@@ -363,17 +354,13 @@ class DeviceService:
             attrs["Device Password"] = device_password
             
             # Prepare update payload
-            # We want to update name, model, and attributes.
+            # We want to update name, model, and attributes. The rest of the
+            # device goes back as it is: traccar's PUT clears any field left out.
             device_update = {
-                "id": device_id,
+                **dev,
                 "name": new_name,
-                "uniqueId": dev["uniqueId"], # Required usually
                 "model": new_model,
                 "attributes": attrs,
-                "groupId": dev.get("groupId"),
-                "phone": dev.get("phone"),
-                "category": dev.get("category"),
-                "disabled": dev.get("disabled", False)
             }
             
             await self.client.update_device(device_id, device_update)

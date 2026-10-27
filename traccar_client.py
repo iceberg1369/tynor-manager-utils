@@ -135,17 +135,11 @@ class TraccarClient:
         attrs = dev.get("attributes", {})
         attrs.update(new_attrs)
 
-        payload = {
-            "id": device_id,
-            "name": dev["name"],
-            "uniqueId": dev["uniqueId"],
-            "status": dev.get("status"),
-            "model": model or dev.get("model"),
-            "groupId": dev.get("groupId"),
-            "contact": dev.get("contact"),
-            "category": dev.get("category"),
-            "attributes": attrs
-        }
+        # traccar's PUT writes every column, so send the whole device back:
+        # a field left out (phone, expirationTime, ...) would be cleared
+        payload = {**dev, "attributes": attrs}
+        if model:
+            payload["model"] = model
 
         sess = await self._get_session()
         url = f"{self._base_url}/devices/{device_id}"
