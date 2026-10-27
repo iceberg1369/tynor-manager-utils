@@ -18,6 +18,38 @@ def device_type_to_model(device_type):
     if dt == 92: return "TYNOR-T920"
     return "unknown"
 
+
+# A command reply identical to the device's previous one (LOCKED:SERIAL twice in
+# a row) is dropped by traccar's Duplicate/Distance filters: no event, so the app
+# never hears back. The computed attribute resultKey gives every reply a unique
+# value, and listing it in the device's filter.skipAttributes lets it through.
+REPLY_COMPUTED_ATTRIBUTES = ["resultKey"]
+# filter.skipAttributes from traccar.xml. The device attribute replaces it rather
+# than adding to it, so the device's list has to repeat it.
+SERVER_SKIP_ATTRIBUTES = "in3,result,general,alarm,movement,ignitionChange,io246,io252,io251,io249,io244,io255"
+
+
+async def ensure_reply_filters(client: TraccarClient, device_id: int):
+    """Link REPLY_COMPUTED_ATTRIBUTES to the device and add them to its
+    filter.skipAttributes. Safe to run again on a device that has them."""
+    computed = {a.get("attribute"): a["id"] for a in await client.get_computed_attributes()}
+    linked = {a["id"] for a in await client.get_computed_attributes(device_id)}
+    for name in REPLY_COMPUTED_ATTRIBUTES:
+        attribute_id = computed.get(name)
+        if attribute_id is None:
+            print(f"⚠️ Computed attribute {name} not found on traccar; device {device_id} can't get it")
+        elif attribute_id not in linked:
+            await client.add_permission_generic("permissions", "deviceId", device_id, "attributeId", attribute_id)
+            print(f"✅ Linked computed attribute {name} ({attribute_id}) to device {device_id}")
+
+    dev = await client.get_device(device_id)
+    skip = dev.get("attributes", {}).get("filter.skipAttributes") or SERVER_SKIP_ATTRIBUTES
+    keys = [k.strip() for k in skip.split(",") if k.strip()]
+    missing = [name for name in REPLY_COMPUTED_ATTRIBUTES if name not in keys]
+    if missing:
+        await client.update_device_attributes(device_id, {"filter.skipAttributes": ",".join(keys + missing)})
+
+
 class DeviceService:
     def __init__(self, client: TraccarClient):
         self.client = client

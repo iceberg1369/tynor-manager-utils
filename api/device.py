@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import config
 from utils import is_imei, model_from_sn
 from traccar_client import TraccarClient
+from services import ensure_reply_filters
 
 router = APIRouter()
 
@@ -143,6 +144,13 @@ async def handle_device_request(request: Request):
             await client.update_device_attributes(device['id'], {"sn": sn}, model=model_from_sn(sn))
         except Exception as e:
             print(f"Failed to save S/N/model: {e}")
+
+    # 7c. Let repeated command replies (a second LOCKED:SERIAL) through
+    # traccar's duplicate filter, starting with the cmd 29 reply below
+    try:
+        await ensure_reply_filters(client, device['id'])
+    except Exception as e:
+        print(f"❌ Failed to set up reply filters for device {device['id']}: {e}")
 
     # 8. Send Command to the device
     cmd_data = {

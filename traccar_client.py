@@ -61,6 +61,10 @@ class TraccarClient:
     async def get_devices(self, params: dict = None):
         return await self._call("devices?all=true", params=params)
 
+    async def get_computed_attributes(self, device_id: int = None):
+        """All computed attributes, or only those linked to `device_id`."""
+        return await self._call("attributes/computed", params={"deviceId": device_id} if device_id else None)
+
     async def get_users(self, params: dict = None):
         return await self._call("users", params=params)
 
