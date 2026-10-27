@@ -17,6 +17,7 @@ from tasks import periodic_getparams_task
 from tasks import periodic_getimsi_task
 from tasks import periodic_getpass_task
 from database import init_db
+from utils import is_t950
 from api.fota import router as fota_router
 from api.ussd_parser import router as ussd_router
 from api.auth import router as auth_router
@@ -73,7 +74,7 @@ async def lifespan(app: FastAPI):
 
         t950_devices = [
             d for d in devices
-            if d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950"
+            if is_t950(d)
         ]
 
         print(f"\n✅ Found {len(t950_devices)} T950 devices\n")

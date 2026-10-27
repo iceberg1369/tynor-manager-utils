@@ -2,7 +2,7 @@
 import asyncio
 from datetime import datetime, timedelta
 from traccar_client import TraccarClient
-from utils import get_balance_ussd
+from utils import get_balance_ussd, is_t950
 
 # -----------------------------------------------------------
 # Per-device action: send balance-check USSD (respects 6h recency)
@@ -60,7 +60,7 @@ async def periodic_sim_balance_qssd_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+                if is_t950(d)
             ]
 
             count = 0
@@ -119,7 +119,7 @@ async def periodic_simcard_no_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+                if is_t950(d)
             ]
 
             count = 0
@@ -151,7 +151,7 @@ async def periodic_getparams_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+                if is_t950(d)
             ]
 
             count = 0
@@ -189,7 +189,7 @@ async def periodic_getimsi_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+                if is_t950(d)
             ]
 
             count = 0
@@ -225,7 +225,7 @@ async def periodic_getpass_task(api_client: TraccarClient):
 
             t950_devices = [
                 d for d in devices
-                if (d.get("model") == "T950" or d.get("attributes", {}).get("model") == "T950")
+                if is_t950(d)
             ]
 
             count = 0

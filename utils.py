@@ -29,6 +29,15 @@ def model_from_sn(sn) -> str | None:
     return None
 
 
+T950_MODELS = {"T950", "TYNOR-T950"}
+
+
+def is_t950(dev: dict) -> bool:
+    """A T950, by either spelling of its model: older devices have "T950",
+    registration writes "TYNOR-T950" (from the dm or the S/N)."""
+    return dev.get("model") in T950_MODELS or dev.get("attributes", {}).get("model") in T950_MODELS
+
+
 def is_imei(s: str) -> bool:
     """
     Check if string looks like an IMEI (15 digits).
