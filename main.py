@@ -46,7 +46,15 @@ async def lifespan(app: FastAPI):
 
     # Pre-fetch the device list BEFORE the WS listener starts, so any
     # deviceOnline event for an unknown device is correctly flagged as new.
-    await service.load_known_devices()
+    # Traccar runs on this host too and takes a while to come up after a
+    # reboot, so wait for it rather than fail the startup.
+    while True:
+        try:
+            await service.load_known_devices()
+            break
+        except Exception as e:
+            print(f"⏳ Traccar not reachable yet ({e!r}); retrying in 5 s")
+            await asyncio.sleep(5)
 
     # Start WebSocket
     # We pass the service.handle_ws_message as the callback

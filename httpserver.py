@@ -81,7 +81,21 @@ def start_server(lifespan):
     async def serve():
         for server in servers:
             server_tasks.append(asyncio.ensure_future(server.serve()))
-        await asyncio.gather(*server_tasks)
+        await asyncio.wait(server_tasks, return_when=asyncio.FIRST_COMPLETED)
+        # on a shutdown signal uvicorn hands the signal from one server to the
+        # next, so the ones still running are already told to exit
+        if all(server.should_exit for server, task in zip(servers, server_tasks) if not task.done()):
+            await asyncio.gather(*server_tasks)
+            return
+        # one server stopped on its own (e.g. the HTTP one, whose lifespan
+        # startup failed) while the other runs on: stop it too and exit with
+        # an error, so systemd restarts the whole service instead of leaving
+        # it half up
+        print("❌ A server stopped unexpectedly; shutting down so the service restarts.")
+        for server in servers:
+            server.should_exit = True
+        await asyncio.gather(*server_tasks, return_exceptions=True)
+        raise SystemExit(1)
 
     # Run the event loop
     loop = asyncio.new_event_loop()
