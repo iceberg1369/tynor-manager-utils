@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import config
 from traccar_client import TraccarClient
-from services import DeviceService
+from services import DeviceService, ensure_computed_attributes
 from tasks import periodic_sim_balance_qssd_task
 from tasks import periodic_simcard_no_task
 from tasks import periodic_getparams_task
@@ -56,6 +56,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"⏳ Traccar not reachable yet ({e!r}); retrying in 5 s")
             await asyncio.sleep(5)
+
+    try:
+        await ensure_computed_attributes(client)
+    except Exception as e:
+        print(f"❌ Couldn't check the TYNOR computed attributes: {e!r}")
 
     # Start WebSocket
     # We pass the service.handle_ws_message as the callback

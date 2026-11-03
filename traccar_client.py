@@ -62,8 +62,13 @@ class TraccarClient:
         return await self._call("devices?all=true", params=params)
 
     async def get_computed_attributes(self, device_id: int = None):
-        """All computed attributes, or only those linked to `device_id`."""
-        return await self._call("attributes/computed", params={"deviceId": device_id} if device_id else None)
+        """All computed attributes, or only those linked to `device_id`.
+        Without all=true an admin only sees the ones linked to the admin user."""
+        return await self._call("attributes/computed", params={"deviceId": device_id} if device_id else {"all": "true"})
+
+    async def create_computed_attribute(self, attribute: dict):
+        """Create a computed attribute; traccar links it to the admin user, not to any device."""
+        return await self._post("attributes/computed", attribute)
 
     async def get_users(self, params: dict = None):
         return await self._call("users", params=params)

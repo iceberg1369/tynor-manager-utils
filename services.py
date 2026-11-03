@@ -28,6 +28,67 @@ REPLY_COMPUTED_ATTRIBUTES = ["resultKey"]
 # than adding to it, so the device's list has to repeat it.
 SERVER_SKIP_ATTRIBUTES = "in3,result,general,alarm,movement,ignitionChange,io246,io252,io251,io249,io244,io255"
 
+# The TYNOR computed attributes traccar needs (ids 4-8 on the production server).
+# JEXL runs in strict mode, so an undefined variable throws: always write (x ?? default).
+# Priority < 0 runs before the filters, 0 after the motion handler.
+TYNOR_COMPUTED_ATTRIBUTES = [
+    {   # traccar turns these IOs into alarms only for FM[B-Z] models, never for TYNOR ones
+        "description": "TYNOR FMB alarms (io242/244/246/249/251/252/255 -> alarm)",
+        "attribute": "alarm",
+        "expression": "(io252 ?? 0) == 1 ? \"powerCut\" : (io246 ?? 0) == 1 ? \"tow\" : (io244 ?? 0) == 1 ? \"vibration\" : (io251 ?? 0) == 1 ? \"idle\" : (io249 ?? 0) == 1 ? \"jamming\" : (io242 ?? 0) == 1 ? \"lowPower\" : (io255 ?? -1) >= 0 ? \"overspeed\" : (alarm ?? null)",
+        "type": "string",
+        "priority": 0,
+    },
+    {   # old firmware sends event records without a fix; filter.invalid would drop them
+        "description": "TYNOR event records are valid without a fix (bypass filter.invalid)",
+        "attribute": "valid",
+        "expression": "(event ?? 0) != 0 ? true : null",
+        "type": "boolean",
+        "priority": -1,
+    },
+    {   # listed in filter.skipAttributes
+        "description": "TYNOR event record key, in filter.skipAttributes (bypass distance/static/duplicate)",
+        "attribute": "eventKey",
+        "expression": "(event ?? 0) != 0 ? event + \"@\" + fixTime.getTime() : null",
+        "type": "string",
+        "priority": -1,
+    },
+    {   # a command reply has no ignition; without this the next ignition change raises no event
+        "description": "TYNOR keep ignition on command-result positions (carry last known), so ignition changes after a command reply raise events",
+        "attribute": "ignition",
+        "expression": "ignition ?? (lastIgnition ?? null)",
+        "type": "boolean",
+        "priority": 0,
+    },
+    {   # REPLY_COMPUTED_ATTRIBUTES, linked by ensure_reply_filters
+        "description": "TYNOR command reply key, in filter.skipAttributes (identical consecutive replies bypass distance/duplicate)",
+        "attribute": "resultKey",
+        "expression": "(result ?? null) != null ? result + \"@\" + serverTime.getTime() : null",
+        "type": "string",
+        "priority": -1,
+    },
+]
+
+
+async def ensure_computed_attributes(client: TraccarClient):
+    """Create each TYNOR_COMPUTED_ATTRIBUTES entry that traccar doesn't have,
+    matched by attribute name. An existing one is never changed, only reported
+    when its expression differs. Creating doesn't link it to any device."""
+    existing = {}
+    for a in await client.get_computed_attributes():
+        existing.setdefault(a.get("attribute"), []).append(a)
+    created = []
+    for want in TYNOR_COMPUTED_ATTRIBUTES:
+        have = existing.get(want["attribute"])
+        if not have:
+            new = await client.create_computed_attribute(dict(want))
+            created.append(new)
+            print(f"✅ Created computed attribute {want['attribute']} ({new.get('id')})")
+        elif not any(a.get("expression") == want["expression"] for a in have):
+            ids = ", ".join(str(a.get("id")) for a in have)
+            print(f"⚠️ Computed attribute {want['attribute']} ({ids}) differs from the TYNOR expression; left as is")
+    return created
+
 
 async def ensure_reply_filters(client: TraccarClient, device_id: int):
     """Link REPLY_COMPUTED_ATTRIBUTES to the device and add them to its
