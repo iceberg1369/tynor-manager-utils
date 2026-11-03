@@ -19,11 +19,12 @@ def device_type_to_model(device_type):
     return "unknown"
 
 
-# A command reply identical to the device's previous one (LOCKED:SERIAL twice in
-# a row) is dropped by traccar's Duplicate/Distance filters: no event, so the app
-# never hears back. The computed attribute resultKey gives every reply a unique
-# value, and listing it in the device's filter.skipAttributes lets it through.
-REPLY_COMPUTED_ATTRIBUTES = ["resultKey"]
+# Computed attributes that give a position a unique value, added to the device's
+# filter.skipAttributes so traccar's Distance/Duplicate filters let it through.
+# resultKey: a command reply identical to the previous one (LOCKED:SERIAL twice
+# in a row) would be dropped, with no event, so the app never hears back.
+# eventKey: an event record (ignition, tow, ...) from a parked car would be dropped.
+TYNOR_SKIP_ATTRIBUTES = ["eventKey", "resultKey"]
 # filter.skipAttributes from traccar.xml. The device attribute replaces it rather
 # than adding to it, so the device's list has to repeat it.
 SERVER_SKIP_ATTRIBUTES = "in3,result,general,alarm,movement,ignitionChange,io246,io252,io251,io249,io244,io255"
@@ -46,7 +47,7 @@ TYNOR_COMPUTED_ATTRIBUTES = [
         "type": "boolean",
         "priority": -1,
     },
-    {   # listed in filter.skipAttributes
+    {   # TYNOR_SKIP_ATTRIBUTES
         "description": "TYNOR event record key, in filter.skipAttributes (bypass distance/static/duplicate)",
         "attribute": "eventKey",
         "expression": "(event ?? 0) != 0 ? event + \"@\" + fixTime.getTime() : null",
@@ -60,7 +61,7 @@ TYNOR_COMPUTED_ATTRIBUTES = [
         "type": "boolean",
         "priority": 0,
     },
-    {   # REPLY_COMPUTED_ATTRIBUTES, linked by ensure_reply_filters
+    {   # TYNOR_SKIP_ATTRIBUTES
         "description": "TYNOR command reply key, in filter.skipAttributes (identical consecutive replies bypass distance/duplicate)",
         "attribute": "resultKey",
         "expression": "(result ?? null) != null ? result + \"@\" + serverTime.getTime() : null",
@@ -73,7 +74,8 @@ TYNOR_COMPUTED_ATTRIBUTES = [
 async def ensure_computed_attributes(client: TraccarClient):
     """Create each TYNOR_COMPUTED_ATTRIBUTES entry that traccar doesn't have,
     matched by attribute name. An existing one is never changed, only reported
-    when its expression differs. Creating doesn't link it to any device."""
+    when its expression differs. Creating doesn't link it to any device;
+    ensure_tynor_attributes does that at registration."""
     existing = {}
     for a in await client.get_computed_attributes():
         existing.setdefault(a.get("attribute"), []).append(a)
@@ -90,12 +92,13 @@ async def ensure_computed_attributes(client: TraccarClient):
     return created
 
 
-async def ensure_reply_filters(client: TraccarClient, device_id: int):
-    """Link REPLY_COMPUTED_ATTRIBUTES to the device and add them to its
-    filter.skipAttributes. Safe to run again on a device that has them."""
+async def ensure_tynor_attributes(client: TraccarClient, device_id: int):
+    """Link every TYNOR_COMPUTED_ATTRIBUTES entry to the device and add
+    TYNOR_SKIP_ATTRIBUTES to its filter.skipAttributes, keeping what the list
+    already has. Safe to run again on a device that has them."""
     computed = {a.get("attribute"): a["id"] for a in await client.get_computed_attributes()}
     linked = {a["id"] for a in await client.get_computed_attributes(device_id)}
-    for name in REPLY_COMPUTED_ATTRIBUTES:
+    for name in (a["attribute"] for a in TYNOR_COMPUTED_ATTRIBUTES):
         attribute_id = computed.get(name)
         if attribute_id is None:
             print(f"⚠️ Computed attribute {name} not found on traccar; device {device_id} can't get it")
@@ -106,7 +109,7 @@ async def ensure_reply_filters(client: TraccarClient, device_id: int):
     dev = await client.get_device(device_id)
     skip = dev.get("attributes", {}).get("filter.skipAttributes") or SERVER_SKIP_ATTRIBUTES
     keys = [k.strip() for k in skip.split(",") if k.strip()]
-    missing = [name for name in REPLY_COMPUTED_ATTRIBUTES if name not in keys]
+    missing = [name for name in TYNOR_SKIP_ATTRIBUTES if name not in keys]
     if missing:
         await client.update_device_attributes(device_id, {"filter.skipAttributes": ",".join(keys + missing)})
 

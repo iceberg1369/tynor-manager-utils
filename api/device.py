@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import config
 from utils import is_imei, model_from_sn
 from traccar_client import TraccarClient
-from services import ensure_reply_filters
+from services import ensure_tynor_attributes
 
 router = APIRouter()
 
@@ -145,12 +145,13 @@ async def handle_device_request(request: Request):
         except Exception as e:
             print(f"Failed to save S/N/model: {e}")
 
-    # 7c. Let repeated command replies (a second LOCKED:SERIAL) through
-    # traccar's duplicate filter, starting with the cmd 29 reply below
+    # 7c. Link the TYNOR computed attributes (alarms, events without a fix,
+    # ignition on replies) and let repeated command replies and event records
+    # through traccar's duplicate filter, starting with the cmd 29 reply below
     try:
-        await ensure_reply_filters(client, device['id'])
+        await ensure_tynor_attributes(client, device['id'])
     except Exception as e:
-        print(f"❌ Failed to set up reply filters for device {device['id']}: {e}")
+        print(f"❌ Failed to set up TYNOR attributes for device {device['id']}: {e}")
 
     # 8. Send Command to the device
     cmd_data = {
