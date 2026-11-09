@@ -160,6 +160,15 @@ class DeviceService:
         print(f"\n🆕 New device detected — ID:{device_id}")
         print(dev)
 
+        # Traccar created it on its first connection (registerUnknown), so it has
+        # none of the TYNOR filter keys yet. Give it those now, so its first
+        # parked keep-alives, repeated replies and event records aren't dropped.
+        # Only the filter keys: alarm/valid/ignition come with registration.
+        try:
+            await ensure_tynor_attributes(self.client, device_id, names=TYNOR_SKIP_ATTRIBUTES)
+        except Exception as e:
+            print(f"❌ Failed to set up TYNOR filter keys for new device {device_id}: {e}")
+
         # Kick off the new-device provisioning sequence. It starts by asking the
         # device for its firmware/model (getver) after a 2-minute settle delay.
         asyncio.create_task(self._provision_new_device(device_id))
