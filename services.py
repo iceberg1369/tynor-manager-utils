@@ -106,13 +106,16 @@ async def ensure_computed_attributes(client: TraccarClient):
     return created
 
 
-async def ensure_tynor_attributes(client: TraccarClient, device_id: int):
+async def ensure_tynor_attributes(client: TraccarClient, device_id: int, names=None):
     """Link every TYNOR_COMPUTED_ATTRIBUTES entry to the device and add
     TYNOR_SKIP_ATTRIBUTES to its filter.skipAttributes, keeping what the list
-    already has. Safe to run again on a device that has them."""
+    already has. Safe to run again on a device that has them.
+    `names` limits it to those attributes (and their skip keys), e.g.
+    TYNOR_SKIP_ATTRIBUTES alone for a sweep that mustn't turn on alarms."""
+    wanted = [a["attribute"] for a in TYNOR_COMPUTED_ATTRIBUTES if names is None or a["attribute"] in names]
     computed = {a.get("attribute"): a["id"] for a in await client.get_computed_attributes()}
     linked = {a["id"] for a in await client.get_computed_attributes(device_id)}
-    for name in (a["attribute"] for a in TYNOR_COMPUTED_ATTRIBUTES):
+    for name in wanted:
         attribute_id = computed.get(name)
         if attribute_id is None:
             print(f"⚠️ Computed attribute {name} not found on traccar; device {device_id} can't get it")
@@ -123,7 +126,7 @@ async def ensure_tynor_attributes(client: TraccarClient, device_id: int):
     dev = await client.get_device(device_id)
     skip = dev.get("attributes", {}).get("filter.skipAttributes") or SERVER_SKIP_ATTRIBUTES
     keys = [k.strip() for k in skip.split(",") if k.strip()]
-    missing = [name for name in TYNOR_SKIP_ATTRIBUTES if name not in keys]
+    missing = [name for name in TYNOR_SKIP_ATTRIBUTES if name in wanted and name not in keys]
     if missing:
         await client.update_device_attributes(device_id, {"filter.skipAttributes": ",".join(keys + missing)})
 

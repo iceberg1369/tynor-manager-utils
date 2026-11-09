@@ -56,6 +56,14 @@ async def test_tynor_attributes():
     assert client.add_permission_generic.await_args_list == links(5, 6, 7, 8, 9)
     print("✅ Missing attribute OK")
 
+    print("TEST: names limits the links and the skip keys (sweep without alarm/valid/ignition)...")
+    client = mock_client({"filter.skipAttributes": SERVER_SKIP_ATTRIBUTES + ",resultKey"}, linked={8})
+    await ensure_tynor_attributes(client, 300, names=["eventKey", "resultKey", "stopKey"])
+    assert client.add_permission_generic.await_args_list == links(6, 9)
+    client.update_device_attributes.assert_awaited_once_with(
+        300, {"filter.skipAttributes": SERVER_SKIP_ATTRIBUTES + ",resultKey,eventKey,stopKey"})
+    print("✅ Subset OK")
+
 
 if __name__ == "__main__":
     asyncio.run(test_tynor_attributes())
