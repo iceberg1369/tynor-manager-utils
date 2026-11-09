@@ -24,12 +24,14 @@ def device_type_to_model(device_type):
 # resultKey: a command reply identical to the previous one (LOCKED:SERIAL twice
 # in a row) would be dropped, with no event, so the app never hears back.
 # eventKey: an event record (ignition, tow, ...) from a parked car would be dropped.
-TYNOR_SKIP_ATTRIBUTES = ["eventKey", "resultKey"]
+# stopKey: a parked car's keep-alives would all be dropped, so traccar never saw it
+# stand still and never reported the stop.
+TYNOR_SKIP_ATTRIBUTES = ["eventKey", "resultKey", "stopKey"]
 # filter.skipAttributes from traccar.xml. The device attribute replaces it rather
 # than adding to it, so the device's list has to repeat it.
 SERVER_SKIP_ATTRIBUTES = "in3,result,general,alarm,movement,ignitionChange,io246,io252,io251,io249,io244,io255"
 
-# The TYNOR computed attributes traccar needs (ids 4-8 on the production server).
+# The TYNOR computed attributes traccar needs (ids 4-9 on the production server).
 # JEXL runs in strict mode, so an undefined variable throws: always write (x ?? default).
 # Priority < 0 runs before the filters, 0 after the motion handler.
 TYNOR_COMPUTED_ATTRIBUTES = [
@@ -65,6 +67,18 @@ TYNOR_COMPUTED_ATTRIBUTES = [
         "description": "TYNOR command reply key, in filter.skipAttributes (identical consecutive replies bypass distance/duplicate)",
         "attribute": "resultKey",
         "expression": "(result ?? null) != null ? result + \"@\" + serverTime.getTime() : null",
+        "type": "string",
+        "priority": -1,
+    },
+    {   # TYNOR_SKIP_ATTRIBUTES. Traccar (report.trip.newLogic) confirms a stop only from a
+        # position >= report.trip.minDuration (180 s) after the car stopped, within 200 m of
+        # the recent ones; a parked tracker's keep-alives all fall to filter.distance. The
+        # first record >= 180 s after the last stored one gets 1@, the next one 2@ (the
+        # first only clears the drive out of traccar's window, the second confirms the
+        # stop), later ones nothing, so a stop costs two rows.
+        "description": "TYNOR parked keep-alive key, in filter.skipAttributes (the first two records >=180 s after the last stored one bypass distance, so traccar can confirm the stop)",
+        "attribute": "stopKey",
+        "expression": "(lastStopKey ?? \"\") =^ \"1@\" ? \"2@\" + fixTime.getTime() : ((lastStopKey ?? \"\") == \"\" && fixTime.getTime() - (lastFixTime ?? fixTime).getTime() >= 180000 ? \"1@\" + fixTime.getTime() : null)",
         "type": "string",
         "priority": -1,
     },
