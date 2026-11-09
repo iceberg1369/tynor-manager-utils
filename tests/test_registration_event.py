@@ -36,8 +36,11 @@ class MockTraccarClient:
 
 async def test_logic():
     print("TEST: device_type_to_model mapping...")
-    assert device_type_to_model(10) == "A10"
-    assert device_type_to_model(90) == "Smart-S900"
+    # the cmd 29 dm is the firmware's DEVICE_MODEL (version.h): T950 = 50
+    assert device_type_to_model(50) == "TYNOR-T950"
+    assert device_type_to_model(95) == "TYNOR-T950"
+    assert device_type_to_model(90) == "TYNOR-T900"
+    assert device_type_to_model(120) == "TYNOR-T120"
     assert device_type_to_model(999) == "unknown"
     print("✅ Mapping OK")
     
@@ -65,7 +68,7 @@ async def test_logic():
             "spn": "Provider",
             "fw": 131,
             "ts": 1769341620,
-            "dm": 10 # A10
+            "dm": 50 # T950
         }
     }
     
@@ -79,11 +82,22 @@ async def test_logic():
     
     assert u_id == 105
     assert u_data["name"] == "خودرو 4"
-    assert u_data["model"] == "A10"
+    assert u_data["model"] == "TYNOR-T950"
     assert u_data["attributes"]["firmware"] == 131
     assert u_data["attributes"]["imsi"] == "987654321098765"
-    
+    # traccar's PUT clears any field left out, so the rest goes back as it was
+    assert u_data["phone"] == "0912..."
+    assert u_data["groupId"] == 1
+
     print("✅ Registration Handler OK")
+
+    print("TEST: a dm the manager doesn't know keeps the device's model...")
+    client = MockTraccarClient()
+    service = DeviceService(client)
+    await service.handle_registration_event(105, {"cmd": 29, "param": dict(cmd_result["param"], dm=999)})
+    client.update_device.assert_called_once()
+    assert client.update_device.call_args[0][1]["model"] == "OldModel"
+    print("✅ Unknown dm OK")
 
 if __name__ == "__main__":
     asyncio.run(test_logic())
